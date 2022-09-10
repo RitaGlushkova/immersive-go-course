@@ -7,9 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	
 	"strings"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/time/rate"
 )
 
 var htmlHead = "<!DOCTYPE html><html>"
@@ -23,7 +25,7 @@ func goDotEnvVariable(key string) string {
 	return os.Getenv(key)
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 
 	case "GET":
@@ -58,7 +60,6 @@ func handler500(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerAuth(w http.ResponseWriter, r *http.Request) {
-
 	username := goDotEnvVariable("AUTH_USERNAME")
 	password := goDotEnvVariable("AUTH_PASSWORD")
 	u, p, ok := r.BasicAuth()
@@ -69,16 +70,26 @@ func handlerAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte(fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, username)))
-
+}
+func handlerLimit(w http.ResponseWriter, r *http.Request) {
+	limiter := rate.NewLimiter(100, 30)
+	if limiter.Allow() {
+		w.Header().Add("Content-Type", "text/html")
+		w.Write([]byte("<!DOCTYPE html>\n<html>\nHello world!"))
+	} else {
+		w.WriteHeader(503)
+		message := "503 Service Unavailable"
+		w.Write([]byte(fmt.Sprintf("%v\n", message)))
+	}
 }
 
 func main() {
-	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/", handlerIndex)
 	http.HandleFunc("/200", handler200)
 	http.HandleFunc("/authenticated", handlerAuth)
 	http.HandleFunc("/500", handler500)
 	http.HandleFunc("/404", http.NotFoundHandler().ServeHTTP)
-
+	http.HandleFunc("/limited", handlerLimit)
 	log.Println("Listening...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
