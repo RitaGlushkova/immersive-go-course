@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -75,7 +74,7 @@ func handlerLimit(w http.ResponseWriter, r *http.Request) {
 	limiter := rate.NewLimiter(100, 30)
 	if limiter.Allow() {
 		w.Header().Add("Content-Type", "text/html")
-		w.Write([]byte("<!DOCTYPE html>\n<html>\nHello world!"))
+		w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
 	} else {
 		w.WriteHeader(503)
 		message := "503 Service Unavailable"
