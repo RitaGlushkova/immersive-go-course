@@ -2,14 +2,14 @@ package cmd
 
 import (
 	"fmt"
-	"net/url"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
 
 func NewRootCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "go-ls",
 		Short: "go-ls command reads a directory, generating a list of files or sub-directories",
 		Long:  ``,
@@ -19,26 +19,29 @@ func NewRootCmd() *cobra.Command {
 			if len(args) > 0 {
 				dir = args[0]
 			}
+
 			fileInfo, err := os.Stat(dir)
 			if err != nil {
 				return err
 			}
 			if !fileInfo.IsDir() {
-				fmt.Printf("%s\n", dir)
+
+				_, file := filepath.Split(dir)
+				fmt.Fprintln(cmd.OutOrStdout(), file)
 				return nil
 			}
+
 			files, err := os.ReadDir(dir)
 			if err != nil {
 				return err
 			}
 			for _, file := range files {
-				fmt.Println(file.Name())
+				fmt.Fprintln(cmd.OutOrStdout(), file.Name())
 			}
+
 			return nil
 		},
 	}
-	cmd.Flags().BoolP("", "m", false, "Stream output format; list files across the page, separated by commas.")
-	return cmd
 }
 
 func Execute() {

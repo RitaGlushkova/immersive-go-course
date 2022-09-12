@@ -43,6 +43,7 @@ func handlerIndex(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Fatal(err)
 		}
+		w.WriteHeader(202)
 		w.Write([]byte(fmt.Sprintf("%v%v\n", htmlHead, html.EscapeString(string(b)))))
 	default:
 		w.Write([]byte("Only GET and POST methods are available"))
