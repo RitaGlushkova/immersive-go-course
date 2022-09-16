@@ -71,15 +71,16 @@ func handlerAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, username)))
 }
-func handlerLimit(w http.ResponseWriter, r *http.Request) {
-	limiter := rate.NewLimiter(100, 30)
-	if limiter.Allow() {
-		w.Header().Add("Content-Type", "text/html")
-		w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
-	} else {
-		w.WriteHeader(503)
-		message := "503 Service Unavailable"
-		w.Write([]byte(fmt.Sprintf("%v\n", message)))
+
+func handlerLimit(limiter *rate.Limiter, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		if !limiter.Allow() {
+			w.WriteHeader(429)
+			// it then returns, not passing the request down the chain
+		} else {
+			h.ServeHTTP(w, r)
+		}
 	}
 }
 
@@ -89,7 +90,10 @@ func main() {
 	http.HandleFunc("/authenticated", handlerAuth)
 	http.HandleFunc("/500", handler500)
 	http.HandleFunc("/404", http.NotFoundHandler().ServeHTTP)
-	http.HandleFunc("/limited", handlerLimit)
+	limiter := rate.NewLimiter(100, 30)
+	http.HandleFunc("/limited", handlerLimit(limiter, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
+	}))
 	log.Println("Listening...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +29,7 @@ func TestEndpoints(t *testing.T) {
 	})
 	t.Run("POST /", func(t *testing.T) {
 		b := strings.NewReader("<em>Hi</em>")
-		request,_ := http.NewRequest(http.MethodPost, "/", b)
+		request, _ := http.NewRequest(http.MethodPost, "/", b)
 		response := httptest.NewRecorder()
 		handlerIndex(response, request)
 		assertStatus(t, response.Code, http.StatusAccepted)
@@ -68,20 +70,36 @@ func TestEndpoints(t *testing.T) {
 		handlerAuth(response, request)
 		assertStatus(t, response.Code, http.StatusUnauthorized)
 	})
-	t.Run("GET /limited (OK)",  func(t *testing.T) {
+	t.Run("GET /limited (OK)", func(t *testing.T) {
+		limiter := rate.NewLimiter(100, 30)
+		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("[]"))
+		})
 		request, _ := http.NewRequest(http.MethodGet, "/limited", nil)
-		response := httptest.NewRecorder()
-		for i :=0; i<100; i++ {
-		handlerLimit(response, request)}
-		assertStatus(t, response.Code, http.StatusOK)
+		var recorder []int
+		handler := handlerLimit(limiter, testHandler)
+		for i := 0; i < 32; i++ {
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, request)
+			recorder = append(recorder, rr.Code)
+		}
+		fmt.Printf("%v", recorder)
+		countOK := 0
+		count429 := 0
+		for _, v := range recorder {
+			if v == 200 {
+				countOK++
+			} else {
+				count429++
+			}
+		}
+		got1, got2 := countOK, count429
+		want1, want2 := 30, 2
+		fmt.Println(got1, got2, want1, want2)
+		if (got1 != want1) || (got2 != want2) {
+			t.Errorf("response body is wrong, got number of successful requests %v and rejected %v want %v and %v", got1, got2, want1, want2)
+		}
 	})
-	// t.Run("GET /limited (FAILED)",  func(t *testing.T) {
-	// 	request, _ := http.NewRequest(http.MethodGet, "/limited", nil)
-	// 	response := httptest.NewRecorder()
-	// 	for i :=0; i<2000000; i++ {
-	// 	handlerLimit(response, request)}
-	// 	assertStatus(t, response.Code, http.StatusServiceUnavailable)
-	// })
 }
 
 func assertStatus(t testing.TB, got, want int) {
