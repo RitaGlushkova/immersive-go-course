@@ -30,22 +30,24 @@ func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		w.Header().Set("Content-Type", "text/html") //text/plain sends a string as response
 		keys, ok := r.URL.Query()["foo"]
+		defaultResponse := htmlHead+"<em>Hello, world</em>"
 		if ok {
 			foo := keys[0]
-			w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em><p>Query parameters:<ul><li>foo: %v</li></ul>\n", htmlHead, html.EscapeString(foo))))
-		} else {
-			w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
-		}
-
+			defaultResponse = defaultResponse + fmt.Sprintf("<p>Query parameters:<ul><li>foo: %v</li></ul>\n", html.EscapeString(foo))
+		} 
+		w.Write([]byte(fmt.Sprintf("%v\n", defaultResponse)))
+		
 	case "POST":
 		w.Header().Set("Content-Type", "text/html")
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err)
+			w.WriteHeader(500)
 		}
 		w.WriteHeader(202)
 		w.Write([]byte(fmt.Sprintf("%v%v\n", htmlHead, html.EscapeString(string(b)))))
 	default:
+		w.WriteHeader(405)
 		w.Write([]byte("Only GET and POST methods are available"))
 	}
 }
@@ -64,7 +66,6 @@ func handlerAuth(w http.ResponseWriter, r *http.Request) {
 	password := goDotEnvVariable("AUTH_PASSWORD")
 	u, p, ok := r.BasicAuth()
 	if !ok || u != username || p != password {
-		fmt.Println("Error parsing basic auth")
 		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 		w.WriteHeader(401)
 		return
@@ -74,10 +75,8 @@ func handlerAuth(w http.ResponseWriter, r *http.Request) {
 
 func handlerLimit(limiter *rate.Limiter, h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		if !limiter.Allow() {
 			w.WriteHeader(429)
-			// it then returns, not passing the request down the chain
 		} else {
 			h.ServeHTTP(w, r)
 		}

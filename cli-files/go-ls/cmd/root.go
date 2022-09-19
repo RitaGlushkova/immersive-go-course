@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -16,18 +15,16 @@ func NewRootCmd() *cobra.Command {
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
-			if len(args) > 0 {
+			if len(args) > 1 {
 				dir = args[0]
 			}
-
+			
 			fileInfo, err := os.Stat(dir)
 			if err != nil {
 				return err
 			}
 			if !fileInfo.IsDir() {
-
-				_, file := filepath.Split(dir)
-				fmt.Fprintln(cmd.OutOrStdout(), file)
+				fmt.Fprintln(cmd.OutOrStdout(), dir)
 				return nil
 			}
 
@@ -35,6 +32,7 @@ func NewRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			for _, file := range files {
 				fmt.Fprintln(cmd.OutOrStdout(), file.Name())
 			}

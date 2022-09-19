@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
@@ -58,10 +57,13 @@ func TestEndpoints(t *testing.T) {
 	})
 	t.Run("GET /authenticated (OK)", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		// Computed by running echo -n Aladdin:open sesame | base64
+		//(base64.StdEncoding.EncodeToString([]byte("Aladdin:open sesame"))).
 		request.Header.Add("Authorization", "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 		response := httptest.NewRecorder()
 		handlerAuth(response, request)
 		assertStatus(t, response.Code, http.StatusOK)
+		assertResponseBody(t, response.Body.String(), "<!DOCTYPE html><html><em>Hello, Aladdin!</em>\n")
 	})
 	t.Run("GET /authenticated (FAIL)", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/authenticated", nil)
@@ -76,28 +78,29 @@ func TestEndpoints(t *testing.T) {
 			w.Write([]byte("[]"))
 		})
 		request, _ := http.NewRequest(http.MethodGet, "/limited", nil)
-		var recorder []int
+		var responsesCodes []int
 		handler := handlerLimit(limiter, testHandler)
 		for i := 0; i < 32; i++ {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, request)
-			recorder = append(recorder, rr.Code)
+			responsesCodes = append(responsesCodes, rr.Code)
 		}
-		fmt.Printf("%v", recorder)
-		countOK := 0
-		count429 := 0
-		for _, v := range recorder {
+		gotOK := 0
+		got429 := 0
+
+		for _, v := range responsesCodes {
 			if v == 200 {
-				countOK++
+				gotOK++
+			}
+			if v == 429 {
+				got429++
 			} else {
-				count429++
+				t.Errorf("did not get correct status code. Got %v, want 200 or 429.", v)
 			}
 		}
-		got1, got2 := countOK, count429
-		want1, want2 := 30, 2
-		fmt.Println(got1, got2, want1, want2)
-		if (got1 != want1) || (got2 != want2) {
-			t.Errorf("response body is wrong, got number of successful requests %v and rejected %v want %v and %v", got1, got2, want1, want2)
+		wantOK, want429 := 30, 2
+		if gotOK != wantOK {
+			t.Errorf("did not get correct of responses codes. Got number of successful requests %v, want %v. Got number of rejected requests %v, want %v", gotOK, wantOK, got429, want429)
 		}
 	})
 }

@@ -5,14 +5,28 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
+func CatFiles (out io.Writer, args []string) error {
+
+for _, arg := range args {
+				data, err := os.ReadFile(arg)
+				if err != nil {
+					return err
+				}
+				out.Write(data)
+
+			}
+			return nil
+}
+
 // rootCmd represents the base command when called without any subcommands
 func NewRootCmd() *cobra.Command {
-	 return &cobra.Command{
+	return &cobra.Command{
 		Use:   "go-cat",
 		Short: "go-cat command will output the contents of a file",
 		Long: `go-cat command that takes a path to a file as an argument, 
@@ -20,22 +34,9 @@ func NewRootCmd() *cobra.Command {
  `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				fmt.Fprintln(os.Stderr, "Missing parameter, provide file name!")
-				os.Exit(2)
+				return fmt.Errorf("missing parameter, provide file name")
 			}
-			if len(args) > 1 {
-				fmt.Fprintf(os.Stderr, "Remove any extra arguments after %v\n", args[0])
-				os.Exit(3)
-			}
-			path := args[0]
-			data, err := os.ReadFile(path)
-			if err != nil {
-				//fmt.Fprintf(os.Stderr, "Can't read file: %v", path)
-				return err
-			}
-			//command that takes a path to a file as an argument
-			os.Stdout.Write(data)
-			return nil
+			return CatFiles(cmd.OutOrStdout(), args)
 		},
 	}
 }
@@ -44,7 +45,7 @@ func Execute() {
 	rootCmd := NewRootCmd()
 	err := rootCmd.Execute()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		//fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
