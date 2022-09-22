@@ -1,45 +1,42 @@
 package cmd
 
 import (
-	"testing"
 	"bytes"
-
-	"io/ioutil"
-
+	"strings"
+	"testing"
 )
 
 func Test_ExecuteCommand(t *testing.T) {
 	cmd := NewRootCmd()
-	b := bytes.NewBufferString("test")
+	b := bytes.NewBufferString("")
 	cmd.SetOut(b)
+	errB := bytes.NewBufferString("")
+	cmd.SetErr(errB)
 	cmd.SetArgs([]string{})
 	cmd.Execute()
-	out, err := ioutil.ReadAll(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != "test" {
-		t.Fatalf("expected \"%s\" got \"%s\"", "test", string(out))
+	err := errB.String()
+	wantError := "Error: missing parameter, provide file name"
+	if !strings.Contains(err, wantError) {
+		t.Fatalf("expected \"%s\" got \"%s\"", wantError, err)
 	}
 }
 
 func Test_ExecuteCommandWithFile(t *testing.T) {
 	cmd := NewRootCmd()
 	b := bytes.NewBufferString("")
+	errB := bytes.NewBufferString("")
+	cmd.SetErr(errB)
+	err := errB.String()
 	cmd.SetOut(b)
 	cmd.SetArgs([]string{"../assets/rain.txt"})
 	cmd.Execute()
-	out, err := ioutil.ReadAll(b)
+	out := b.String()
 	expected := `“The Taste of Rain” by Jack Kerouac
 
 The taste
 Of rain
 —Why kneel?`
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != expected {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected, string(out))
+	if out != expected {
+		t.Fatalf("expected \"%s\" got \"%s\" stderr = %s", expected, out, err)
 	}
 }

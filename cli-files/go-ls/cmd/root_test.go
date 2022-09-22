@@ -1,61 +1,79 @@
 package cmd
 
 import (
-	"testing"
 	"bytes"
-	"io/ioutil"
+	"strings"
+	"testing"
 )
 
-func Test_ExecuteCommand(t *testing.T) {
+func executeCommand(args ...string) (out string, err string) {
 	cmd := NewRootCmd()
-	b := bytes.NewBufferString("")
+	b := new(bytes.Buffer)
 	cmd.SetOut(b)
-	cmd.SetArgs([]string{})
+	cmd.SetArgs(args)
+	e := new(bytes.Buffer)
+	cmd.SetErr(e)
 	cmd.Execute()
-	out, err := ioutil.ReadAll(b)
+	out = b.String()
+	err = e.String()
+	return out, err
+}
+
+func Test_ExecuteCommandCatchErrors(t *testing.T) {
+	_, err := executeCommand("h")
+	expectedError := `no such file or directory`
+	if !strings.Contains(err, expectedError) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expectedError, err)
+	}
+}
+
+func Test_ExecuteCommandWithNoArgs(t *testing.T) {
+	out, _ := executeCommand()
 	expected := `root.go
 root_test.go
 `
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != expected {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected , string(out))
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
 	}
 }
 
 func Test_ExecuteCommandWithDirName(t *testing.T) {
-	cmd := NewRootCmd()
-	b := bytes.NewBufferString("")
-	cmd.SetOut(b)
-	cmd.SetArgs([]string{"../assets"})
-	cmd.Execute()
-	out, err := ioutil.ReadAll(b)
+	out, _ := executeCommand("../assets")
 	expected := `dew.txt
 for_you.txt
 rain.txt
 `
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != expected {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected, string(out))
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
 	}
 }
 
 func Test_ExecuteCommandWithFileName(t *testing.T) {
-	cmd := NewRootCmd()
-	b := bytes.NewBufferString("")
-	cmd.SetOut(b)
-	cmd.SetArgs([]string{"../assets/dew.txt"})
-	cmd.Execute()
-	out, err := ioutil.ReadAll(b)
-	if err != nil {
-		t.Fatal(err)
+	out, _ := executeCommand("../assets/dew.txt")
+	expected := `../assets/dew.txt`
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
 	}
-	expected := `dew.txt
+}
+
+func Test_ExecuteCommandWithTwoFileNames(t *testing.T) {
+	out, _ := executeCommand("../assets/dew.txt", "../assets/rain.txt")
+	expected := `../assets/dew.txt
+../assets/rain.txt
 `
-	if string(out) != expected {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected, string(out))
+	if out != expected {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
+}
+
+func Test_ExecuteCommandWithFileNameAndDir(t *testing.T) {
+	out, _ := executeCommand("../go.mod", "../assets")
+	expected := `../go.mod
+dew.txt
+for_you.txt
+rain.txt
+`
+	if out != expected {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
 	}
 }
