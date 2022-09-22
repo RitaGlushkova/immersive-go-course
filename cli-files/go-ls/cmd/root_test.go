@@ -2,102 +2,78 @@ package cmd
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/require"
-	"testing"
 	"strings"
-	"github.com/spf13/cobra"
+	"testing"
 )
-func execute(t *testing.T, c *cobra.Command, args ...string) (string, error) {
-  t.Helper()
 
-  buf := new(bytes.Buffer)
-  c.SetOut(buf)
-  c.SetErr(buf)
-  c.SetArgs(args)
-
-  err := c.Execute()
-  return strings.TrimSpace(buf.String()), err
+func executeCommand(args ...string) (out string, err string) {
+	cmd := NewRootCmd()
+	b := new(bytes.Buffer)
+	cmd.SetOut(b)
+	cmd.SetArgs(args)
+	e := new(bytes.Buffer)
+	cmd.SetErr(e)
+	cmd.Execute()
+	out = b.String()
+	err = e.String()
+	return out, err
 }
 
-// func Test_ExecuteCommand(t *testing.T) {
-// 	cmd := NewRootCmd()
-// 	b := bytes.NewBufferString("")
-// 	cmd.SetOut(b)
-// 	cmd.SetArgs([]string{})
-// 	err := cmd.Execute()
-// 	expected := `root.go
-// root_test.go
-// `
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	require.Equal(t, expected, b.String())
-// }
+func Test_ExecuteCommandCatchErrors(t *testing.T) {
+	_, err := executeCommand("h")
+	expectedError := `no such file or directory`
+	if !strings.Contains(err, expectedError) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expectedError, err)
+	}
+}
 
-// func Test_ExecuteCommandWithDirName(t *testing.T) {
-// 	cmd := NewRootCmd()
-// 	b := bytes.NewBufferString("")
-// 	cmd.SetOut(b)
-// 	cmd.SetArgs([]string{"../assets"})
-// 	cmd.Execute()
-// 	_, err := cmd.ExecuteC()
-// 	expected := `dew.txt
-// for_you.txt
-// rain.txt
-// `
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	require.Equal(t, expected, b.String())
-// }
-
-func Test_ExecuteCommand(t *testing.T) {
-  tt := []struct {
-    args []string
-    err  error
-    out  string
-  }{
-    {
-      args: nil,
-      err:  nil,
-	  out:  `root.go
+func Test_ExecuteCommandWithNoArgs(t *testing.T) {
+	out, _ := executeCommand()
+	expected := `root.go
 root_test.go
-`,
-    },
-    {
-      args: []string{"../assets"},
-      err:  nil,
-      out: `dew.txt
+`
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
+}
+
+func Test_ExecuteCommandWithDirName(t *testing.T) {
+	out, _ := executeCommand("../assets")
+	expected := `dew.txt
 for_you.txt
 rain.txt
-`,
-    },
-    {
-      args: []string{"../assets/dew.txt"},
-      err:  nil,
-      out:  `dew.txt
-`,
-    },
-  }
-  cmd := NewRootCmd()
-  for _, tc := range tt {
-    out, err := execute(t, cmd, tc.args...)
+`
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
+}
 
-    require.Equal(t, tc.err, err)
+func Test_ExecuteCommandWithFileName(t *testing.T) {
+	out, _ := executeCommand("../assets/dew.txt")
+	expected := `../assets/dew.txt`
+	if !strings.Contains(out, expected) {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
+}
 
-    if tc.err == nil {
-      require.Equal(t, tc.out, out)
-    }
-  }
-// 	cmd := NewRootCmd()
-// 	b := bytes.NewBufferString("")
-// 	cmd.SetOut(b)
-// 	cmd.SetArgs([]string{"../assets/dew.txt"})
-// 	err := cmd.Execute()
-// 	if err != nil {
-// 		t.Errorf("Unexpected error: %v", err)
-// 	}
-// 	expected := `dew.txt
-// `
-// 	require.Equal(t, expected, b.String())
+func Test_ExecuteCommandWithTwoFileNames(t *testing.T) {
+	out, _ := executeCommand("../assets/dew.txt", "../assets/rain.txt")
+	expected := `../assets/dew.txt
+../assets/rain.txt
+`
+	if out != expected {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
+}
+
+func Test_ExecuteCommandWithFileNameAndDir(t *testing.T) {
+	out, _ := executeCommand("../go.mod", "../assets")
+	expected := `../go.mod
+dew.txt
+for_you.txt
+rain.txt
+`
+	if out != expected {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, out)
+	}
 }

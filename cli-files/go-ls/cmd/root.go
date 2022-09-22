@@ -14,29 +14,35 @@ func NewRootCmd() *cobra.Command {
 		Long:  ``,
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := "."
-			if len(args) > 1 {
-				dir = args[0]
-			}
-			
-			fileInfo, err := os.Stat(dir)
-			if err != nil {
-				return err
-			}
-			if !fileInfo.IsDir() {
-				fmt.Fprintln(cmd.OutOrStdout(), dir)
-				return nil
+			var dirs []string
+			if len(args) == 0 {
+				dirs = append(dirs, ".")
 			}
 
-			files, err := os.ReadDir(dir)
-			if err != nil {
-				return err
+			if len(args) > 0 {
+				dirs = append(dirs, args...)
 			}
+			for _, dir := range dirs {
+				fileInfo, err := os.Stat(dir)
+				if err != nil {
+					return err
+				}
 
-			for _, file := range files {
-				fmt.Fprintln(cmd.OutOrStdout(), file.Name())
+				if !fileInfo.IsDir() {
+					fmt.Fprintln(cmd.OutOrStdout(), dir)
+					continue
+				}
+
+				files, err := os.ReadDir(dir)
+				//does this error ever happens with the checks we did above?????
+				if err != nil {
+					return err
+				}
+
+				for _, file := range files {
+					fmt.Fprintln(cmd.OutOrStdout(), file.Name())
+				}
 			}
-
 			return nil
 		},
 	}
@@ -44,8 +50,8 @@ func NewRootCmd() *cobra.Command {
 
 func Execute() {
 	rootCmd := NewRootCmd()
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	err := rootCmd.Execute()
+	if err != nil {
 		os.Exit(1)
 	}
 }
