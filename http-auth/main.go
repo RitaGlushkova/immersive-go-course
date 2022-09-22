@@ -24,19 +24,22 @@ func goDotEnvVariable(key string) string {
 	return os.Getenv(key)
 }
 
+var username = goDotEnvVariable("AUTH_USERNAME")
+var password = goDotEnvVariable("AUTH_PASSWORD")
+
 func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 
 	case "GET":
 		w.Header().Set("Content-Type", "text/html") //text/plain sends a string as response
 		keys, ok := r.URL.Query()["foo"]
-		defaultResponse := htmlHead+"<em>Hello, world</em>"
+		defaultResponse := htmlHead + "<em>Hello, world</em>"
 		if ok {
 			foo := keys[0]
-			defaultResponse = defaultResponse + fmt.Sprintf("<p>Query parameters:<ul><li>foo: %v</li></ul>\n", html.EscapeString(foo))
-		} 
+			defaultResponse = defaultResponse + fmt.Sprintf("<p>Query parameters:<ul><li>foo: %v</li></ul>", html.EscapeString(foo))
+		}
 		w.Write([]byte(fmt.Sprintf("%v\n", defaultResponse)))
-		
+
 	case "POST":
 		w.Header().Set("Content-Type", "text/html")
 		b, err := io.ReadAll(r.Body)
@@ -62,8 +65,6 @@ func handler500(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerAuth(w http.ResponseWriter, r *http.Request) {
-	username := goDotEnvVariable("AUTH_USERNAME")
-	password := goDotEnvVariable("AUTH_PASSWORD")
 	u, p, ok := r.BasicAuth()
 	if !ok || u != username || p != password {
 		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)

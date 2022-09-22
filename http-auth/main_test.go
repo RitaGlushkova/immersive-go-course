@@ -94,8 +94,6 @@ func TestEndpoints(t *testing.T) {
 			}
 			if v == 429 {
 				got429++
-			} else {
-				t.Errorf("did not get correct status code. Got %v, want 200 or 429.", v)
 			}
 		}
 		wantOK, want429 := 30, 2
