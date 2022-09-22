@@ -11,17 +11,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func CatFiles (out io.Writer, args []string) error {
+func CatFiles(out io.Writer, args []string) error {
+	for _, arg := range args {
+		data, err := os.ReadFile(arg)
+		if err != nil {
+			return err
+		}
+		out.Write(data)
 
-for _, arg := range args {
-				data, err := os.ReadFile(arg)
-				if err != nil {
-					return err
-				}
-				out.Write(data)
-
-			}
-			return nil
+	}
+	return nil
 }
 
 // rootCmd represents the base command when called without any subcommands
