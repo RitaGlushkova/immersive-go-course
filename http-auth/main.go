@@ -32,13 +32,20 @@ func handlerIndex(w http.ResponseWriter, r *http.Request) {
 
 	case "GET":
 		w.Header().Set("Content-Type", "text/html") //text/plain sends a string as response
-		keys, ok := r.URL.Query()["foo"]
 		defaultResponse := htmlHead + "<em>Hello, world</em>"
-		if ok {
-			foo := keys[0]
-			defaultResponse = defaultResponse + fmt.Sprintf("<p>Query parameters:<ul><li>foo: %v</li></ul>", html.EscapeString(foo))
-		}
 		w.Write([]byte(fmt.Sprintf("%v\n", defaultResponse)))
+
+		if len(r.URL.Query()) != 0 {
+			w.Write([]byte("<p>Query parameters:<ul>"))
+
+			for key, values := range r.URL.Query() {
+				for _, value := range values {
+					w.Write([]byte(fmt.Sprintf("<li>%v: [%v]</li>", key, html.EscapeString(value))))
+				}
+
+			}
+			w.Write([]byte("</ul>"))
+		}
 
 	case "POST":
 		w.Header().Set("Content-Type", "text/html")

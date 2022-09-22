@@ -24,7 +24,7 @@ func TestEndpoints(t *testing.T) {
 		response := httptest.NewRecorder()
 		handlerIndex(response, request)
 		assertStatus(t, response.Code, http.StatusOK)
-		assertResponseBody(t, response.Body.String(), "<!DOCTYPE html><html><em>Hello, world</em><p>Query parameters:<ul><li>foo: &lt;strong&gt;bar&lt;/strong&gt;</li></ul>\n")
+		assertResponseBody(t, response.Body.String(), "<!DOCTYPE html><html><em>Hello, world</em>\n<p>Query parameters:<ul><li>foo: [&lt;strong&gt;bar&lt;/strong&gt;]</li></ul>")
 	})
 	t.Run("POST /", func(t *testing.T) {
 		b := strings.NewReader("<em>Hi</em>")
