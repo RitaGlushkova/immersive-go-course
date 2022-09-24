@@ -24,8 +24,11 @@ func goDotEnvVariable(key string) string {
 	return os.Getenv(key)
 }
 
-var username = goDotEnvVariable("AUTH_USERNAME")
-var password = goDotEnvVariable("AUTH_PASSWORD")
+type Server struct {
+	username string
+	password string
+	limiter  *rate.Limiter
+}
 
 func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -71,36 +74,42 @@ func handler500(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("%v\n", message)))
 }
 
-func handlerAuth(w http.ResponseWriter, r *http.Request) {
-	u, p, ok := r.BasicAuth()
-	if !ok || u != username || p != password {
-		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-		w.WriteHeader(401)
-		return
+func (s *Server) handlerAuth(delegate func(username string) string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != s.username || p != s.password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+			w.WriteHeader(401)
+			return
+		}
+		w.Write([]byte(delegate(s.username)))
 	}
-	w.Write([]byte(fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, username)))
 }
 
-func handlerLimit(limiter *rate.Limiter, h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
-			w.WriteHeader(429)
-		} else {
-			h.ServeHTTP(w, r)
-		}
+func (s *Server) handlerLimit(w http.ResponseWriter, r *http.Request) {
+	if !s.limiter.Allow() {
+		w.WriteHeader(429)
+	} else {
+		w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
 	}
 }
 
 func main() {
+	s := Server{
+		username: goDotEnvVariable("AUTH_USERNAME"),
+		password: goDotEnvVariable("AUTH_PASSWORD"),
+		limiter:  rate.NewLimiter(100, 30),
+	}
+
 	http.HandleFunc("/", handlerIndex)
 	http.HandleFunc("/200", handler200)
-	http.HandleFunc("/authenticated", handlerAuth)
+
+	http.HandleFunc("/authenticated", s.handlerAuth(func(username string) string {
+		return fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, username)
+	}))
 	http.HandleFunc("/500", handler500)
 	http.HandleFunc("/404", http.NotFoundHandler().ServeHTTP)
-	limiter := rate.NewLimiter(100, 30)
-	http.HandleFunc("/limited", handlerLimit(limiter, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf("%v<em>Hello, world</em>\n", htmlHead)))
-	}))
+	http.HandleFunc("/limited", s.handlerLimit)
 	log.Println("Listening...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

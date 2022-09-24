@@ -9,6 +9,12 @@ import (
 )
 
 func TestEndpoints(t *testing.T) {
+	s := Server{
+		username: "rita",
+		password: "123",
+		limiter:  rate.NewLimiter(100, 30),
+	}
+
 	t.Run("GET /", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/", nil)
 		response := httptest.NewRecorder()
@@ -61,7 +67,7 @@ func TestEndpoints(t *testing.T) {
 		//(base64.StdEncoding.EncodeToString([]byte("Aladdin:open sesame"))).
 		request.Header.Add("Authorization", "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 		response := httptest.NewRecorder()
-		handlerAuth(response, request)
+		s.handlerAuth(response, request)
 		assertStatus(t, response.Code, http.StatusOK)
 		assertResponseBody(t, response.Body.String(), "<!DOCTYPE html><html><em>Hello, Aladdin!</em>\n")
 	})
@@ -69,20 +75,16 @@ func TestEndpoints(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/authenticated", nil)
 		request.Header.Add("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ==")
 		response := httptest.NewRecorder()
-		handlerAuth(response, request)
+		s.handlerAuth(response, request)
 		assertStatus(t, response.Code, http.StatusUnauthorized)
 	})
 	t.Run("GET /limited (OK)", func(t *testing.T) {
-		limiter := rate.NewLimiter(100, 30)
-		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("[]"))
-		})
+
 		request, _ := http.NewRequest(http.MethodGet, "/limited", nil)
 		var responsesCodes []int
-		handler := handlerLimit(limiter, testHandler)
 		for i := 0; i < 32; i++ {
 			rr := httptest.NewRecorder()
-			handler.ServeHTTP(rr, request)
+			s.handlerLimit(rr, request)
 			responsesCodes = append(responsesCodes, rr.Code)
 		}
 		gotOK := 0
