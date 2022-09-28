@@ -1,38 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
-	"regexp"
-
 )
-var keyMatchRegex = regexp.MustCompile(`\"(\w+)\":`)
-var wordBarrierRegex = regexp.MustCompile(`(\w)([A-Z])`)
 
 type Image struct {
-	Title   string
-	AltText string
-	URL     string
-}
-type conventionalMarshaller struct {
-	Value interface{}
-}
-func (c conventionalMarshaller) MarshalJSON() ([]byte, error) {
-	marshalled, err := json.Marshal(c.Value)
-
-	converted := keyMatchRegex.ReplaceAllFunc(
-		marshalled,
-		func(match []byte) []byte {
-			return bytes.ToLower(wordBarrierRegex.ReplaceAll(
-				match,
-				[]byte(`${1}_${2}`),
-			))
-		},
-	)
-
-	return converted, err
+	Title   string `json:"title"`
+	AltText string `json:"alt_text"`
+	URL     string `json:"url"`
 }
 
 func handlerImages(w http.ResponseWriter, r *http.Request) {
@@ -48,12 +25,13 @@ func handlerImages(w http.ResponseWriter, r *http.Request) {
 			URL:     "https://images.unsplash.com/photo-1540979388789-6cee28a1cdc9?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80",
 		},
 	}
-	encoded, err := json.MarshalIndent(conventionalMarshaller{images}, "", "  ")
+	//b, err := json.Marshal(images)
+	b, err := json.MarshalIndent(images, "", " ")
 	if err != nil {
 		log.Print(err)
 		w.WriteHeader(500)
 	}
-	w.Write([]byte(encoded))
+	w.Write([]byte(b))
 }
 
 func main() {
