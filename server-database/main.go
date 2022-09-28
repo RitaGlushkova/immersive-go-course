@@ -25,8 +25,17 @@ func handlerImages(w http.ResponseWriter, r *http.Request) {
 			URL:     "https://images.unsplash.com/photo-1540979388789-6cee28a1cdc9?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80",
 		},
 	}
-	//b, err := json.Marshal(images)
-	b, err := json.MarshalIndent(images, "", " ")
+	var indentation = " "
+	values, ok := r.URL.Query()["intent"]
+	if ok {
+		if values[0] == "2" {
+			indentation = "  "
+		}
+		if values[0] == "4" {
+			indentation = "    "
+		}
+	}
+	b, err := json.MarshalIndent(images, "", indentation)
 	if err != nil {
 		log.Print(err)
 		w.WriteHeader(500)
