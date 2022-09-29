@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+
+	//"io"
 	"log"
 	"net/http"
 	"os"
@@ -30,33 +31,35 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Environment variable is not set")
 		os.Exit(1)
 	}
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	conn, err := pgx.Connect(context.Background(), env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
 	defer conn.Close(context.Background())
 	s := &Server{conn: conn}
+	http.HandleFunc("/", handlerIndex)
 	http.HandleFunc("/images.json", s.handlerImages)
 	log.Println("Listening...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
+func handlerIndex(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello World"))
+}
 
 func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
-
 	queryVal := r.URL.Query().Get("indent")
-
 	switch r.Method {
 	case "GET":
-		images, err := fetchImages(s.conn)
+		images, err := FetchImages(s.conn)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			log.Print(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		encoded, err := encodedMarshalJSON(images, queryVal)
+		encoded, err := EncodedMarshalJSON(images, queryVal)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Print(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -64,13 +67,13 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		img, err := postImage(s.conn, r)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			log.Print(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		encoded, err := encodedMarshalJSON(img, queryVal)
+		encoded, err := EncodedMarshalJSON(img, queryVal)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Print(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(encoded))
@@ -81,7 +84,7 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func encodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
+func EncodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 	indent, errIndent := strconv.Atoi(queryVal)
 	var marshalData []byte
 	var marshalErr error
@@ -95,11 +98,12 @@ func encodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 	}
 	if marshalErr != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't encode inserted values: %v\n", marshalErr)
+		return nil, marshalErr
 	}
-	return marshalData, marshalErr
+	return marshalData, nil
 }
 
-func fetchImages(conn *pgx.Conn) ([]Image, error) {
+func FetchImages(conn *pgx.Conn) ([]Image, error) {
 	rows, err := conn.Query(context.Background(), "SELECT title, url, alt_text FROM public.images")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)
@@ -119,23 +123,21 @@ func fetchImages(conn *pgx.Conn) ([]Image, error) {
 }
 
 func postImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't read body: %v\n", err)
-		return nil, err
-	}
+	// b, err := io.ReadAll(r.Body)
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Couldn't read request body: %v\n", err)
+	// 	return nil, err
+	// }
 	var img Image
-	err = json.Unmarshal(b, &img)
+	err := json.NewDecoder(r.Body).Decode(&img)
+	//err = json.Unmarshal(b, &img)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't decode input: %v\n", err)
 		return nil, err
 	}
 	_, err = conn.Exec(context.Background(), "INSERT INTO public.images (title, url, alt_text) VALUES ($1, $2, $3)", img.Title, img.URL, img.AltText)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "POST query failed: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("could not insert row: %w", err)
 	}
 	return &img, nil
 }
-
-
