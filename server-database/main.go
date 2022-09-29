@@ -20,6 +20,67 @@ type Image struct {
 	AltText string `json:"alt_text"`
 }
 
+type Server struct {
+	conn *pgx.Conn
+}
+
+func main() {
+	env := os.Getenv("DATABASE_URL")
+	if env == "" {
+		fmt.Fprintf(os.Stderr, "Environment variable is not set")
+		os.Exit(1)
+	}
+	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close(context.Background())
+	s := &Server{conn: conn}
+	http.HandleFunc("/images.json", s.handlerImages)
+	log.Println("Listening...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
+
+	queryVal := r.URL.Query().Get("indent")
+
+	switch r.Method {
+	case "GET":
+		images, err := fetchImages(s.conn)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			log.Print(err)
+		}
+		encoded, err := encodedMarshalJSON(images, queryVal)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Print(err)
+
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(encoded))
+	case "POST":
+		img, err := postImage(s.conn, r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			log.Print(err)
+		}
+		encoded, err := encodedMarshalJSON(img, queryVal)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Print(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(encoded))
+	default:
+		w.WriteHeader(405)
+		w.Write([]byte("Only GET and POST methods are available"))
+
+	}
+}
+
 func encodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 	indent, errIndent := strconv.Atoi(queryVal)
 	var marshalData []byte
@@ -27,7 +88,7 @@ func encodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 	if errIndent != nil {
 		//DO I WANT TO INFORM ABOUT IT ????
 	}
-	if indent > 0 && errIndent == nil {
+	if indent > 0 && indent < 15 && errIndent == nil {
 		marshalData, marshalErr = json.MarshalIndent(data, "", strings.Repeat(" ", indent))
 	} else {
 		marshalData, marshalErr = json.Marshal(data)
@@ -77,59 +138,4 @@ func postImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
 	return &img, nil
 }
 
-func handlerImages(w http.ResponseWriter, r *http.Request) {
-	//not sure it is a good solution
-	_, ok := os.LookupEnv("DATABASE_URL")
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Environment variable is not set")
-		os.Exit(1)
-	}
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
-	}
-	defer conn.Close(context.Background())
-	queryVal := r.URL.Query().Get("indent")
 
-	switch r.Method {
-	case "GET":
-		images, err := fetchImages(conn)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			log.Print(err)
-		}
-		encoded, err := encodedMarshalJSON(images, queryVal)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Print(err)
-			
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
-	case "POST":
-		img, err := postImage(conn, r)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			log.Print(err)
-		}
-		encoded, err := encodedMarshalJSON(img, queryVal)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Print(err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
-	default:
-		w.WriteHeader(405)
-		w.Write([]byte("Only GET and POST methods are available"))
-
-	}
-}
-
-func main() {
-
-	http.HandleFunc("/images.json", handlerImages)
-	log.Println("Listening...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
-}
