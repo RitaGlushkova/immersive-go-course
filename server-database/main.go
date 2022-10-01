@@ -50,7 +50,7 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	queryVal := r.URL.Query().Get("indent")
 	switch r.Method {
 	case "GET":
-		images, err := FetchImages(s.conn)
+		images, err := FetchImages(s.conn, "SELECT title, url, alt_text FROM public.images")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -96,14 +96,14 @@ func EncodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 		marshalData, marshalErr = json.Marshal(data)
 	}
 	if marshalErr != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't encode inserted values: %v\n", marshalData)
+		fmt.Fprintf(os.Stderr, "Couldn't proceed with Marshal: %v\n", marshalErr)
 		return nil, marshalErr
 	}
 	return marshalData, nil
 }
 
-func FetchImages(conn *pgx.Conn) ([]Image, error) {
-	rows, err := conn.Query(context.Background(), "SELECT title, url, alt_text FROM public.images")
+func FetchImages(conn *pgx.Conn, str string) ([]Image, error) {
+	rows, err := conn.Query(context.Background(), str)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)
 		return nil, err
