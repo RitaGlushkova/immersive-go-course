@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	//"io"
 	"log"
 	"net/http"
 	"os"
@@ -97,7 +96,7 @@ func EncodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 		marshalData, marshalErr = json.Marshal(data)
 	}
 	if marshalErr != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't encode inserted values: %v\n", marshalErr)
+		fmt.Fprintf(os.Stderr, "Couldn't encode inserted values: %v\n", marshalData)
 		return nil, marshalErr
 	}
 	return marshalData, nil
@@ -136,3 +135,4 @@ func saveImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
 	}
 	return &img, nil
 }
+

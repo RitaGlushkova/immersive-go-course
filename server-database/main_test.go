@@ -33,6 +33,7 @@ func setupSuite(tb testing.TB) func(tb testing.TB) {
 		tb.Fatalf("Teardown Error: Unable to connect to DB: %s", err.Error())
 		os.Exit(1)
 	}
+
 	_, err = conn.Exec(context.Background(), "DELETE from public.images")
 
 	if err != nil {
@@ -56,9 +57,7 @@ func TestMain(t *testing.T) {
 	teardownSuite := setupSuite(t)
 	defer teardownSuite(t)
 	conn, err := pgx.Connect(context.Background(), TEST_DB_URL)
-	if err != nil {
-		t.Fatalf("Unable to insert data: %s", err.Error())
-	}
+	require.NoError(t, err)
 	s := &Server{conn: conn}
 	t.Run("GET /", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -133,6 +132,14 @@ func TestMain(t *testing.T) {
 	})
 }
 
+func TestEncode(t *testing.T) {
+	_, err := EncodedMarshalJSON(make(chan int), "+")
+	require.Error(t, err, "json: unsupported type: chan int")
+}
+
+// func TestFetchFunc(t *testing.T) {
+
+// }
 
 func assertStatus(t testing.TB, got, want int) {
 	t.Helper()
