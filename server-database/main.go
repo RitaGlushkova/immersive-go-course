@@ -65,7 +65,7 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(encoded))
 	case "POST":
-		img, err := postImage(s.conn, r)
+		img, err := saveImage(s.conn, r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -122,15 +122,10 @@ func FetchImages(conn *pgx.Conn) ([]Image, error) {
 	return images, nil
 }
 
-func postImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
-	// b, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Couldn't read request body: %v\n", err)
-	// 	return nil, err
-	// }
+func saveImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
+	decoder := json.NewDecoder(r.Body)
 	var img Image
-	err := json.NewDecoder(r.Body).Decode(&img)
-	//err = json.Unmarshal(b, &img)
+	err := decoder.Decode(&img)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't decode input: %v\n", err)
 		return nil, err
