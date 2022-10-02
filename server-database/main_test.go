@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v4"
@@ -136,9 +135,7 @@ func TestMain(t *testing.T) {
 func TestEncode(t *testing.T) {
 	_, err := EncodedMarshalJSON(make(chan int), "+")
 	expected := "json: unsupported type: chan int"
-	if !strings.Contains(err.Error(), expected) {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected, err.Error())
-	}
+	require.EqualError(t, err, expected)
 }
 
 func TestFetchFunc(t *testing.T) {
@@ -149,10 +146,15 @@ func TestFetchFunc(t *testing.T) {
 	s := &Server{conn: conn}
 	_, err = FetchImages(s.conn, `SELECT title, url, alt_text FROM public.imag`)
 	expected := `ERROR: relation "public.imag" does not exist (SQLSTATE 42P01)`
-	if !strings.Contains(err.Error(), expected) {
-		t.Fatalf("expected \"%s\" got \"%s\"", expected, err.Error())
-	}
+	require.EqualError(t, err, expected)
 }
+
+// func assertError (t testing.TB, err error, expected string) {
+// 	t.Helper()
+// 	if !strings.Contains(err.Error(), expected) {
+// 		t.Fatalf("expected \"%s\" got \"%s\"", expected, err.Error())
+// 	}
+// }
 
 func assertStatus(t testing.TB, got, want int) {
 	t.Helper()
