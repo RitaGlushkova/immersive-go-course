@@ -21,7 +21,9 @@ func NewRootCmd() *cobra.Command {
 				dirs = append(dirs, ".")
 			}
 
-			dirs = append(dirs, args...)
+			if len(args) > 0 {
+				dirs = append(dirs, args...)
+			}
 
 			for _, dir := range dirs {
 				fileInfo, err := os.Stat(dir)
@@ -35,14 +37,14 @@ func NewRootCmd() *cobra.Command {
 				}
 
 				files, err := os.ReadDir(dir)
-				//does this error ever happens with the checks we did above?????
 				if err != nil {
 					return err
 				}
 
-				format := cmd.Flags().Lookup("m").Changed
+				format := cmd.Flags().Lookup("m")
+				//fmt.Printf("t1: %T\n", format)
 				//if no flag
-				if !format {
+				if format == nil {
 					for _, file := range files {
 						fmt.Fprintln(cmd.OutOrStdout(), file.Name())
 					}
@@ -67,4 +69,5 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+	
 }

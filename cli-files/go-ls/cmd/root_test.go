@@ -5,14 +5,15 @@ import (
 	"os"
 	"strings"
 	"testing"
+	
 )
 
-// rename err if it it is not type is error
+// rename err if it is not type is error
 func executeCommand(args ...string) (out string, stderr string, err error) {
 	cmd := NewRootCmd()
 	b := new(bytes.Buffer)
 	cmd.SetOut(b)
-	cmd.SetArgs(args)
+	cmd.SetArgs(args)	
 	e := new(bytes.Buffer)
 	cmd.SetErr(e)
 	err = cmd.Execute()
@@ -45,7 +46,10 @@ func Test_ExecuteCommandCatchErrors(t *testing.T) {
 }
 
 func Test_ExecuteCommandWithNoArgs(t *testing.T) {
-	out, _, _ := executeCommand()
+	out, stderr, err := executeCommand()
+	if err != nil {
+		t.Fatalf("Could not execute command %v", stderr)
+	}
 	expected := `root.go
 root_test.go
 `
@@ -53,7 +57,10 @@ root_test.go
 }
 
 func Test_ExecuteCommandWithDirName(t *testing.T) {
-	out, _, _ := executeCommand("../assets")
+	out, _, err := executeCommand("../assets")
+	if err != nil {
+		t.Fatalf("Could not execute command %v", err)
+	}
 	expected := `dew.txt
 for_you.txt
 rain.txt
@@ -62,13 +69,19 @@ rain.txt
 }
 
 func Test_ExecuteCommandWithFileName(t *testing.T) {
-	out, _, _ := executeCommand("../assets/dew.txt")
+	out, _, err := executeCommand("../assets/dew.txt")
+	if err != nil {
+		t.Fatalf("Could not execute command %v", err)
+	}
 	expected := `../assets/dew.txt`
 	assertContains(t, out, expected)
 }
 
 func Test_ExecuteCommandWithTwoFileNames(t *testing.T) {
-	out, _, _ := executeCommand("../assets/dew.txt", "../assets/rain.txt")
+	out, _, err := executeCommand("../assets/dew.txt", "../assets/rain.txt")
+	if err != nil {
+		t.Fatalf("Could not execute command %v", err)
+	}
 	expected := `../assets/dew.txt
 ../assets/rain.txt
 `
