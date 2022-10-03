@@ -13,6 +13,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
+
+
 var htmlHead = "<!DOCTYPE html><html>"
 
 func goDotEnvVariable(key string) string {

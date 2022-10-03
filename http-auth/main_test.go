@@ -5,14 +5,15 @@ import (
 	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestEndpoints(t *testing.T) {
 	s := Server{
-		username: "rita",
-		password: "123",
+		username: "Aladdin",
+		password: "open sesame",
 		limiter:  rate.NewLimiter(100, 30),
 	}
 
@@ -66,17 +67,23 @@ func TestEndpoints(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/authenticated", nil)
 		// Computed by running echo -n Aladdin:open sesame | base64
 		//(base64.StdEncoding.EncodeToString([]byte("Aladdin:open sesame"))).
-		request.Header.Add("Authorization", "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+		request.Header.Set("Authorization", "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 		response := httptest.NewRecorder()
-		s.handlerAuth(response, request)
+		handler := http.HandlerFunc(s.handlerAuth(func(username string) string {
+			return fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, s.username)
+		}))
+		handler.ServeHTTP(response, request)
 		assertStatus(t, response.Code, http.StatusOK)
 		assertResponseBody(t, response.Body.String(), "<!DOCTYPE html><html><em>Hello, Aladdin!</em>\n")
 	})
 	t.Run("GET /authenticated (FAIL)", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/authenticated", nil)
-		request.Header.Add("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ==")
+		request.Header.Add("Authorization", "Basic dXNlcm5hbWU6cGFzcmQ==")
 		response := httptest.NewRecorder()
-		s.handlerAuth(response, request)
+		handler := s.handlerAuth(func(username string) string {
+			return fmt.Sprintf("%v<em>Hello, %s!</em>\n", htmlHead, s.username)
+		})
+		handler.ServeHTTP(response, request)
 		assertStatus(t, response.Code, http.StatusUnauthorized)
 	})
 	t.Run("GET /limited (OK)", func(t *testing.T) {
@@ -98,13 +105,18 @@ func TestEndpoints(t *testing.T) {
 		got429, ok429 := responsesCodes[429]
 
 		if !ok429 {
-			t.Errorf("Response Code 429 not found")
+			t.Error("Response Code 429 not found")
 		}
 
 		got200, ok200 := responsesCodes[200]
 
 		if !ok200 {
-			t.Errorf("Response Code 200 not found")
+			t.Error("Response Code 200 not found")
+		}
+		if len(responsesCodes) != 2 {
+			keys := reflect.ValueOf(responsesCodes).MapKeys()
+			t.Errorf("Unexpected response codes. Want only 200 and 429, got %v", keys)
+
 		}
 		want200, want429 := 30, 2
 		if got200 != want200 {
