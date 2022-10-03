@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
@@ -81,30 +82,33 @@ func TestEndpoints(t *testing.T) {
 	t.Run("GET /limited (OK)", func(t *testing.T) {
 
 		request, _ := http.NewRequest(http.MethodGet, "/limited", nil)
-		var responsesCodes []int
+		var responsesCodes = make(map[int]int)
 		for i := 0; i < 32; i++ {
 			rr := httptest.NewRecorder()
 			s.handlerLimit(rr, request)
-			responsesCodes = append(responsesCodes, rr.Code)
-		}
-		gotOK := 0
-		got429 := 0
-
-		for _, v := range responsesCodes {
-			if v == 200 {
-				gotOK++
-			}
-			if v == 429 {
-				got429++
-			}
-
-			if v != 200 && v != 429 {
-				t.Errorf("did not get correct of responses code. Got code: %v wanted 200 or 429", v)
+			_, ok := responsesCodes[rr.Code]
+			if ok {
+				responsesCodes[rr.Code]++
+			} else {
+				responsesCodes[rr.Code] = 1
 			}
 		}
-		wantOK, want429 := 30, 2
-		if gotOK != wantOK {
-			t.Errorf("did not get correct of responses codes. Got number of successful requests %v, want %v. Got number of rejected requests %v, want %v", gotOK, wantOK, got429, want429)
+		fmt.Println(responsesCodes)
+
+		got429, ok429 := responsesCodes[429]
+
+		if !ok429 {
+			t.Errorf("Response Code 429 not found")
+		}
+
+		got200, ok200 := responsesCodes[200]
+
+		if !ok200 {
+			t.Errorf("Response Code 200 not found")
+		}
+		want200, want429 := 30, 2
+		if got200 != want200 {
+			t.Errorf("did not get correct of responses codes. Got number of successful requests %v, want %v. Got number of rejected requests %v, want %v", got200, want200, got429, want429)
 		}
 	})
 }

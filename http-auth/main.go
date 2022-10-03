@@ -54,8 +54,9 @@ func handlerIndex(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Print(err)
+			log.Print("Error reading body of POST to index",err)
 			w.WriteHeader(500)
+			return
 		}
 		w.WriteHeader(202)
 		w.Write([]byte(fmt.Sprintf("%v%v\n", htmlHead, html.EscapeString(string(b)))))

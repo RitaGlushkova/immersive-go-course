@@ -11,11 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func CatFiles(out io.Writer, args []string) error {
-	for _, arg := range args {
+func CatFiles(out io.Writer, paths []string) error {
+	for _, arg := range paths {
 
 		data, err := os.ReadFile(arg)
 		if err != nil {
+			// return err
 			fmt.Fprintln(os.Stderr, err)
 			//I do not return err here because I need to read files that I can read
 		}
@@ -46,6 +47,7 @@ func Execute() {
 	rootCmd := NewRootCmd()
 	err := rootCmd.Execute()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

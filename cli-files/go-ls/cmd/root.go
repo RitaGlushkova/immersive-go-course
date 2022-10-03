@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	//"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -19,9 +21,8 @@ func NewRootCmd() *cobra.Command {
 				dirs = append(dirs, ".")
 			}
 
-			if len(args) > 0 {
-				dirs = append(dirs, args...)
-			}
+			dirs = append(dirs, args...)
+
 			for _, dir := range dirs {
 				fileInfo, err := os.Stat(dir)
 				if err != nil {
@@ -39,8 +40,19 @@ func NewRootCmd() *cobra.Command {
 					return err
 				}
 
-				for _, file := range files {
-					fmt.Fprintln(cmd.OutOrStdout(), file.Name())
+				format := cmd.Flags().Lookup("m").Changed
+				//if no flag
+				if !format {
+					for _, file := range files {
+						fmt.Fprintln(cmd.OutOrStdout(), file.Name())
+					}
+				} else {
+					//if flag -m
+					var fileList []string
+					for _, file := range files {
+						fileList = append(fileList, file.Name())
+					}
+					fmt.Fprintln(cmd.OutOrStdout(), strings.Join(fileList, ", "))
 				}
 			}
 			return nil
@@ -50,6 +62,7 @@ func NewRootCmd() *cobra.Command {
 
 func Execute() {
 	rootCmd := NewRootCmd()
+	rootCmd.PersistentFlags().BoolP("m", "m", true, "formats print out in a single line")
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
