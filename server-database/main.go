@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"log"
 	"net/http"
@@ -50,12 +51,12 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	queryVal := r.URL.Query().Get("indent")
 	switch r.Method {
 	case "GET":
-		images, err := FetchImages(s.conn, "SELECT title, url, alt_text FROM public.images")
+		images, err := FetchImages(s.conn)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		encoded, err := EncodedMarshalJSON(images, queryVal)
+		encoded, err := EncodedMarshalJSON(images, queryVal, os.Stderr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -64,12 +65,12 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(encoded))
 	case "POST":
-		img, err := saveImage(s.conn, r)
+		img, err := saveImage(s.conn, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		encoded, err := EncodedMarshalJSON(img, queryVal)
+		encoded, err := EncodedMarshalJSON(img, queryVal, os.Stderr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -83,7 +84,7 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func EncodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
+func EncodedMarshalJSON(data interface{}, queryVal string, diagnostics io.Writer) ([]byte, error) {
 	indent, errIndent := strconv.Atoi(queryVal)
 	var marshalData []byte
 	var marshalErr error
@@ -96,14 +97,14 @@ func EncodedMarshalJSON(data interface{}, queryVal string) ([]byte, error) {
 		marshalData, marshalErr = json.Marshal(data)
 	}
 	if marshalErr != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't proceed with Marshal: %v\n", marshalErr)
+		fmt.Fprintf(diagnostics, "Couldn't proceed with Marshal: %v\n", marshalErr)
 		return nil, marshalErr
 	}
 	return marshalData, nil
 }
 
-func FetchImages(conn *pgx.Conn, str string) ([]Image, error) {
-	rows, err := conn.Query(context.Background(), str)
+func FetchImages(conn *pgx.Conn) ([]Image, error) {
+	rows, err := conn.Query(context.Background(), "SELECT title, url, alt_text FROM public.images")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)
 		return nil, err
@@ -121,8 +122,8 @@ func FetchImages(conn *pgx.Conn, str string) ([]Image, error) {
 	return images, nil
 }
 
-func saveImage(conn *pgx.Conn, r *http.Request) (*Image, error) {
-	decoder := json.NewDecoder(r.Body)
+func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
+	decoder := json.NewDecoder(body)
 	var img Image
 	err := decoder.Decode(&img)
 	if err != nil {

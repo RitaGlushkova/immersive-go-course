@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,7 +28,7 @@ var DataForTests = []Image{
 	},
 }
 
-func setupSuite(tb testing.TB) func(tb testing.TB) {
+func setupSuite(tb testing.TB, addValues bool) func(tb testing.TB) {
 	conn, err := pgx.Connect(context.Background(), TEST_DB_URL)
 	if err != nil {
 		tb.Fatalf("Teardown Error: Unable to connect to DB: %s", err.Error())
@@ -39,10 +40,12 @@ func setupSuite(tb testing.TB) func(tb testing.TB) {
 	if err != nil {
 		tb.Fatalf("Teardown Error: Unable to delete from images: %s", err.Error())
 	}
+	if addValues {
 	_, err = conn.Exec(context.Background(), `INSERT INTO public.images (title, url, alt_text) VALUES ($1, $2, $3), ($4, $5, $6)`, DataForTests[0].Title, DataForTests[0].URL, DataForTests[0].AltText, DataForTests[1].Title, DataForTests[1].URL, DataForTests[1].AltText)
 	if err != nil {
 		tb.Fatalf("Teardown Error: Unable to insert data: %s", err.Error())
 	}
+}
 	return func(tb testing.TB) {
 		// teardown the database after testing
 		_, err := conn.Exec(context.Background(), "DELETE from public.images")
@@ -54,7 +57,7 @@ func setupSuite(tb testing.TB) func(tb testing.TB) {
 }
 
 func TestMain(t *testing.T) {
-	teardownSuite := setupSuite(t)
+	teardownSuite := setupSuite(t, true)
 	defer teardownSuite(t)
 	conn, err := pgx.Connect(context.Background(), TEST_DB_URL)
 	require.NoError(t, err)
@@ -71,8 +74,7 @@ func TestMain(t *testing.T) {
 		response := httptest.NewRecorder()
 		s.handlerImages(response, request)
 		var got []Image
-		decoder := json.NewDecoder(response.Body)
-		err := decoder.Decode(&got)
+		err := json.NewDecoder(response.Body).Decode(&got)
 		if err != nil {
 			t.Error(err)
 		}
@@ -133,13 +135,17 @@ func TestMain(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	_, err := EncodedMarshalJSON(make(chan int), "+")
-	expected := "json: unsupported type: chan int"
-	require.EqualError(t, err, expected)
+	errBuf := bytes.NewBuffer(nil)
+	_, err := EncodedMarshalJSON(make(chan int), "+", errBuf)
+	expected := "Couldn't proceed with Marshal:"
+	got := errBuf.String()
+	//fmt.Println(got)
+	require.Contains(t, got, expected)
+	require.Error(t, err)
 }
 
 func TestFetchFunc(t *testing.T) {
-	teardownSuite := setupSuite(t)
+	teardownSuite := setupSuite(t, false)
 	defer teardownSuite(t)
 	conn, err := pgx.Connect(context.Background(), TEST_DB_URL)
 	require.NoError(t, err)
@@ -148,6 +154,35 @@ func TestFetchFunc(t *testing.T) {
 	expected := `ERROR: relation "public.imag" does not exist (SQLSTATE 42P01)`
 	require.EqualError(t, err, expected)
 }
+
+func TestSaveImageFailsOnBadJSON( t *testing.T) {
+	//clean DB prepare for use
+	teardownSuite := setupSuite(t, false)
+	defer teardownSuite(t)
+	//connect to database
+	conn, err := pgx.Connect(context.Background(), TEST_DB_URL)
+	require.NoError(t, err)
+	defer conn.Close(context.Background())
+	//call saseImage function with bad JSON
+	body := bytes.NewBufferString(`hello`)
+	img, err := saveImage(conn, body )
+	//Assert for an error
+	require.Error(t, err)
+	// Assert the error message are clear
+
+	//if should return nil instead of img Json
+	require.Nil(t, img)
+	// assert that nothing is added to the DB
+	images, errFetch := FetchImages(conn, `SELECT * FROM public.images`)
+	require.NoError(t, errFetch)
+	require.Empty(t, images)
+}
+
+// func requireEmtryDB () {
+// 	return 
+// }
+
+
 
 // func assertError (t testing.TB, err error, expected string) {
 // 	t.Helper()
