@@ -2,18 +2,20 @@ package cmd
 
 import (
 	"bytes"
+	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
-	
+
 )
 
 // rename err if it is not type is error
 func executeCommand(args ...string) (out string, stderr string, err error) {
 	cmd := NewRootCmd()
+	cmd.Flags().BoolP("m", "m", true, "formats print out in a single line")
 	b := new(bytes.Buffer)
 	cmd.SetOut(b)
-	cmd.SetArgs(args)	
+	cmd.SetArgs(args)
 	e := new(bytes.Buffer)
 	cmd.SetErr(e)
 	err = cmd.Execute()
@@ -28,12 +30,12 @@ func assertContains(t *testing.T, str, expected string) {
 	}
 }
 
-// func assertError(t *testing.T, err error) {
-// 	t.Helper()
-// 	if (!os.IsNotExist(err)) && (err != nil) {
-// 		t.Fatalf("Unexpected error, want nil, got %v", err)
-// 	}
-// }
+func assertEqual(t *testing.T, expected, got string) {
+	t.Helper()
+	if got != expected {
+		t.Fatalf("expected \"%s\" got \"%s\"", expected, got)
+	}
+}
 
 func Test_ExecuteCommandCatchErrors(t *testing.T) {
 	_, stderr, err := executeCommand("h")
@@ -53,8 +55,9 @@ func Test_ExecuteCommandWithNoArgs(t *testing.T) {
 	expected := `root.go
 root_test.go
 `
-	assertContains(t, out, expected)
-}
+	assertEqual(t, expected, out)
+	}
+
 
 func Test_ExecuteCommandWithDirName(t *testing.T) {
 	out, _, err := executeCommand("../assets")
@@ -65,7 +68,7 @@ func Test_ExecuteCommandWithDirName(t *testing.T) {
 for_you.txt
 rain.txt
 `
-	assertContains(t, out, expected)
+	assertEqual(t, expected, out)
 }
 
 func Test_ExecuteCommandWithFileName(t *testing.T) {
@@ -73,8 +76,9 @@ func Test_ExecuteCommandWithFileName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not execute command %v", err)
 	}
-	expected := `../assets/dew.txt`
-	assertContains(t, out, expected)
+	expected := `../assets/dew.txt
+`
+	assertEqual(t, expected, out)
 }
 
 func Test_ExecuteCommandWithTwoFileNames(t *testing.T) {
@@ -85,7 +89,7 @@ func Test_ExecuteCommandWithTwoFileNames(t *testing.T) {
 	expected := `../assets/dew.txt
 ../assets/rain.txt
 `
-	assertContains(t, out, expected)
+	assertEqual(t, expected, out)
 }
 
 func Test_ExecuteCommandWithFileNameAndDir(t *testing.T) {
@@ -95,5 +99,16 @@ dew.txt
 for_you.txt
 rain.txt
 `
-	assertContains(t, out, expected)
+	assertEqual(t, expected, out)
+}
+
+func Test_ExecuteCommandWithValidFlag(t *testing.T) {
+	// I need to call command and pass flag there
+	out, _, err := executeCommand("../assets", "-m")
+	//It should not return an err
+	require.NoError(t, err)
+	//I need assert if received string equal to expected
+	expected := `dew.txt, for_you.txt, rain.txt
+`
+	assertEqual(t, expected, out)
 }

@@ -41,10 +41,9 @@ func NewRootCmd() *cobra.Command {
 					return err
 				}
 
-				format := cmd.Flags().Lookup("m")
-				//fmt.Printf("t1: %T\n", format)
+				format := cmd.Flags().Lookup("m").Changed
 				//if no flag
-				if format == nil {
+				if !format {
 					for _, file := range files {
 						fmt.Fprintln(cmd.OutOrStdout(), file.Name())
 					}
