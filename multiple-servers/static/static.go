@@ -9,16 +9,14 @@ import (
 func Run() {
 
 	var path string
-	var port string
+	var port int
 
-	flag.StringVar(&path, "path", "", "files path")
-	flag.StringVar(&port, "port", "", "port")
+	flag.StringVar(&path, "path", "assets", "files path")
+	flag.IntVar(&port, "port", 8082, "port listening")
 	flag.Parse()
 	muxer := http.NewServeMux()
-	if path != "" && port != "" {
-		fileServer := http.FileServer(http.Dir(path))
-		muxer.Handle("/", fileServer)
-		http.ListenAndServe(fmt.Sprintf(":%s", port), muxer)
-	}
+	fileServer := http.FileServer(http.Dir(path))
+	muxer.Handle("/", fileServer)
+	http.ListenAndServe(fmt.Sprintf(":%v", port), muxer)
 
 }

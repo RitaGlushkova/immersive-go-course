@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 
@@ -26,6 +27,11 @@ type Server struct {
 }
 
 func Run() {
+	var port int
+
+	flag.IntVar(&port, "port", 8080, "Port is listening")
+	flag.Parse()
+
 	env := os.Getenv("DATABASE_URL")
 	if env == "" {
 		fmt.Fprintf(os.Stderr, "Environment variable is not set")
@@ -40,8 +46,7 @@ func Run() {
 	s := &Server{conn: conn}
 	http.HandleFunc("/", handlerIndex)
 	http.HandleFunc("/images.json", s.handlerImages)
-	log.Println("Listening...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
 }
 func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hello World"))
@@ -136,4 +141,3 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 	}
 	return &img, nil
 }
-
