@@ -24,7 +24,7 @@ function timeout(t, v) {
 
 const gallery$ = document.querySelector(".gallery");
 
-fetchImages(true).then(
+fetchImages(false).then(
   (images) => {
     gallery$.textContent = images.length ? "" : "No images available.";
 
