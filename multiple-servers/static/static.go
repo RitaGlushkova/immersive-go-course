@@ -14,7 +14,7 @@ func Run() {
 	flag.Parse()
 	log.Printf("path: %s\n", *path)
 	log.Printf("port: %s\n", *port)
-	fileServer := http.FileServer(http.Dir("./" + *path))
+	fileServer := http.FileServer(http.Dir(*path))
 	http.Handle("/", fileServer)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", *port), nil))
 }
