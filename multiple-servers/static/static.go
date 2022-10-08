@@ -3,20 +3,19 @@ package static
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 )
 
 func Run() {
 
-	var path string
-	var port int
-
-	flag.StringVar(&path, "path", "assets", "files path")
-	flag.IntVar(&port, "port", 8082, "port listening")
+	path := flag.String("path", "assets", "files path")
+	port := flag.String("port", "8082", "port listening")
 	flag.Parse()
-	muxer := http.NewServeMux()
-	fileServer := http.FileServer(http.Dir(path))
-	muxer.Handle("/", fileServer)
-	http.ListenAndServe(fmt.Sprintf(":%v", port), muxer)
-
+	log.Printf("path: %s\n", *path)
+	log.Printf("port: %s\n", *port)
+	fileServer := http.FileServer(http.Dir("./" + *path))
+	http.Handle("/", fileServer)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", *port), nil))
 }
+

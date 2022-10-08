@@ -26,6 +26,7 @@ const gallery$ = document.querySelector(".gallery");
 
 fetchImages(false).then(
   (images) => {
+    console.log(images);
     gallery$.textContent = images.length ? "" : "No images available.";
 
     images.forEach((img) => {
