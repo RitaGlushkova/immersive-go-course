@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,27 +11,23 @@ import (
 )
 
 type Image struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	AltText string `json:"alt_text"`
+	Title   string 
+	URL     string 
+	AltText string 
 }
 
 type Server struct {
 	conn *pgx.Conn
 }
 
-func Run() {
-	var port int
+type Config struct {
+	Port         int
+	DATABASE_URL string
+}
 
-	flag.IntVar(&port, "port", 8081, "Port is listening")
-	flag.Parse()
-	log.Printf("port: %d\n", port)
-	env := os.Getenv("DATABASE_URL")
-	if env == "" {
-		fmt.Fprintf(os.Stderr, "Environment variable is not set")
-		os.Exit(1)
-	}
-	conn, err := pgx.Connect(context.Background(), env)
+func Run(c Config) error {
+
+	conn, err := pgx.Connect(context.Background(), c.DATABASE_URL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
@@ -40,11 +35,11 @@ func Run() {
 	defer conn.Close(context.Background())
 	s := &Server{conn: conn}
 	http.HandleFunc("/images.json", s.handlerImages)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
+	return http.ListenAndServe(fmt.Sprintf(":%d", c.Port), nil)
 }
 
 func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	queryVal := r.URL.Query().Get("indent")
 	switch r.Method {
 	case "GET":
@@ -79,8 +74,4 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Only GET and POST methods are available"))
 	}
 	log.Println(r.Method, r.URL.EscapedPath())
-}
-
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "http://localhost:8082")
 }

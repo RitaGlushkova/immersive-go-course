@@ -13,7 +13,7 @@ func EncodedMarshalJSON(data interface{}, queryVal string, diagnostics io.Writer
 	var marshalData []byte
 	var marshalErr error
 	if errIndent != nil {
-		//
+		fmt.Printf("Can not read indent %d, default value will be 0", indent)
 	}
 	if indent > 0 && indent < 15 && errIndent == nil {
 		marshalData, marshalErr = json.MarshalIndent(data, "", strings.Repeat(" ", indent))
