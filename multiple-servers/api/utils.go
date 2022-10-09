@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"net/http"
+	"os"
 )
 
 func EncodedMarshalJSON(data interface{}, queryVal string, diagnostics io.Writer) ([]byte, error) {
@@ -25,4 +27,15 @@ func EncodedMarshalJSON(data interface{}, queryVal string, diagnostics io.Writer
 		return nil, marshalErr
 	}
 	return marshalData, nil
+}
+
+func encodeAndResponseJSON (w *http.ResponseWriter, data interface {}, query string) {
+	encoded, err := EncodedMarshalJSON(data, query, os.Stderr)
+		if err != nil {
+			http.Error((*w), err.Error(), http.StatusInternalServerError)
+			return
+
+		}
+		(*w).Header().Set("Content-Type", "application/json")
+		(*w).Write([]byte(encoded))
 }
