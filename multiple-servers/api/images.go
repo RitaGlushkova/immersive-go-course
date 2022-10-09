@@ -34,12 +34,12 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 	var img Image
 	err := decoder.Decode(&img)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't decode input: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Couldn't decode input %v\n: %v\n", img, err)
 		return nil, err
 	}
 	_, err = conn.Exec(context.Background(), "INSERT INTO public.images (title, url, alt_text) VALUES ($1, $2, $3)", img.Title, img.URL, img.AltText)
 	if err != nil {
-		return nil, fmt.Errorf("could not insert row: %w", err)
+		return nil, err
 	}
 	return &img, nil
 }

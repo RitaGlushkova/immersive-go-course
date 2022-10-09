@@ -40,35 +40,24 @@ func Run(c Config) error {
 
 func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	queryVal := r.URL.Query().Get("indent")
+	indent := r.URL.Query().Get("indent")
 	switch r.Method {
 	case "GET":
 		images, err := FetchImages(s.conn)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		encoded, err := EncodedMarshalJSON(images, queryVal, os.Stderr)
-		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
+		encodeAndResponseJSON(&w, images, indent)
+
 	case "POST":
 		img, err := saveImage(s.conn, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		encoded, err := EncodedMarshalJSON(img, queryVal, os.Stderr)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
+		encodeAndResponseJSON(&w, img, indent)
+
 	default:
 		w.WriteHeader(405)
 		w.Write([]byte("Only GET and POST methods are available"))
