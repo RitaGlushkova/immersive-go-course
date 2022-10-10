@@ -1,7 +1,7 @@
 package api
 
 import (
-	"context"
+	"context" 
 	"fmt"
 	"log"
 	"net/http"
@@ -45,7 +45,8 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		images, err := FetchImages(s.conn)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			errMessage := "Something went wrong"
+			http.Error(w, errMessage, http.StatusInternalServerError)
 			return
 		}
 		encodeAndResponseJSON(&w, images, indent)
@@ -53,7 +54,8 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		img, err := saveImage(s.conn, r.Body)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			errMessage := "Couldn't post an image"
+			http.Error(w, errMessage, http.StatusBadRequest)
 			return
 		}
 		encodeAndResponseJSON(&w, img, indent)

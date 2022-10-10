@@ -21,7 +21,7 @@ func FetchImages(conn *pgx.Conn) ([]Image, error) {
 		var title, url, altText string
 		err = rows.Scan(&title, &url, &altText)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Scan for rows failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Scan for rows failed: %v\n", err) //printing to the server
 			return nil, err
 		}
 		images = append(images, Image{Title: title, URL: url, AltText: altText})
@@ -39,6 +39,7 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 	}
 	_, err = conn.Exec(context.Background(), "INSERT INTO public.images (title, url, alt_text) VALUES ($1, $2, $3)", img.Title, img.URL, img.AltText)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Couldn't store image %v\n: %v\n", img, err)
 		return nil, err
 	}
 	return &img, nil
