@@ -35,7 +35,8 @@ func Run(c Config) error {
 	defer conn.Close(context.Background())
 	s := &Server{conn: conn}
 	http.HandleFunc("/images.json", s.handlerImages)
-	return http.ListenAndServe(fmt.Sprintf(":%d", c.Port), nil)
+	
+	return http.ListenAndServe(fmt.Sprintf(":%d",c.Port), nil)
 }
 
 func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {

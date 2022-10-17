@@ -16,7 +16,7 @@ func FetchImages(conn *pgx.Conn) ([]Image, error) {
 		fmt.Fprintf(os.Stderr, "Query failed: %v\n", err)
 		return nil, err
 	}
-	var images []Image
+	images := make([]Image, 0)
 	for rows.Next() {
 		var title, url, altText string
 		err = rows.Scan(&title, &url, &altText)
