@@ -14,9 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//if you send to static server localhost:8089/ - tests HTML/CSS/JS
-//send request to api server - receive successful response
-//send 10 requests to api server - each server is getting it at least once
 func startServer (port int, path string, res string, numberOfReqPerPort map[int]int) {
 	//start a server which han have isolated handlers
 	serveMux := http.NewServeMux()
@@ -35,16 +32,19 @@ func startServer (port int, path string, res string, numberOfReqPerPort map[int]
 func TestMain(t *testing.T) {
 	numberOfReqPerPort := make(map[int]int)
 	//decide what we send to nginx and what we expect back
-	//staticRequest, _ := http.NewRequest(http.MethodGet, "/", nil)
 	wantStaticResponseBody := "Hello static"
-	startServer(8082, "/", wantStaticResponseBody, numberOfReqPerPort)
 	wantApiResponseBody := "Hello api"
+	
+	// start mock servers
+	startServer(8082, "/", wantStaticResponseBody, numberOfReqPerPort)
 	startServer(8081, "/images.json", wantApiResponseBody, numberOfReqPerPort)
 	startServer(8083, "/images.json", wantApiResponseBody, numberOfReqPerPort)
 	startServer(8084, "/images.json", wantApiResponseBody, numberOfReqPerPort)
-	// start mock servers
-	abs, err := filepath.Abs("./nginx.conf")
 
+
+	//start nginx
+	//nginx -c "`pwd`/config/nginx.conf"
+	abs, err := filepath.Abs("./nginx.conf")
 	// Printing if there is no error
 	if err != nil {
 		t.Fatal(err)
@@ -59,8 +59,7 @@ func TestMain(t *testing.T) {
 	}
 	defer syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	time.Sleep(1 * time.Second)
-	//start nginx
-	//nginx -c "`pwd`/config/nginx.conf"
+	
 	//send stuff
 	resStatic := requestToServerAndResponseWithBody(t, "http://localhost:8089/")
 	resApi := requestToServerAndResponseWithBody(t, "http://localhost:8089/api/images.json")
@@ -68,6 +67,7 @@ func TestMain(t *testing.T) {
 	require.Equal(t, wantStaticResponseBody, resStatic)
 	require.Equal(t, wantApiResponseBody, resApi)
 
+	//send 10 requests to api server - each server is getting it at least once
 	for i := 1; i < 10; i++ {
  		requestToServerAndResponseWithBody(t, "http://localhost:8089/api/images.json")
 	}
