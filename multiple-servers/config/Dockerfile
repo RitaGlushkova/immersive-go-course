@@ -5,29 +5,29 @@ FROM golang:1.16-buster AS build
 
 #copy go.sum and go.mod to get the packages we will be using into /app directory
 WORKDIR /app
-COPY ../go.mod ./
-COPY ../go.sum ./
+COPY go.mod ./
+COPY go.sum ./
 
 #download packages
 RUN go mod download
+
+#copy the main GO test file
+COPY config/nginx_test.go ./
+
+#build singe binary file for tests withour running it
+RUN go test -c -o test nginx_test.go
 
 #install nginx into the same directory
 FROM nginx:latest
 WORKDIR /app
 
 #copy what we need from config directory
-COPY mime.types ./
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY config/mime.types ./
+COPY config/nginx.conf ./
 
-#expose to port we using in nginx
-EXPOSE 8089
-
-#copy the main GO test file
-COPY nginx_test.go ./
-
-#build our nginx_test app
-RUN go build -o test nginx_test.go
+#copy iur binary file from build image into our main image
+COPY --from=build /app/test /app/test
 
 #run tests
-ENTRYPOINT ["./nginx_test.go"]
+ENTRYPOINT ["/app/test"]
 
