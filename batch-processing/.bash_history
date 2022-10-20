@@ -1,0 +1,1 @@
+go run . --input /inputs/ --output /outputs/

@@ -7,11 +7,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	// "github.com/aws/aws-sdk-go/aws"
+	// "github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	// "github.com/aws/aws-sdk-go/aws/session"
+	// "github.com/aws/aws-sdk-go/service/s3"
 )
 
 
 func main() {
-
+	
 	// Accept --input and --output arguments for the images
 	inputPath := flag.String("input", "", "A path to an image to be processed")
 	outputPath := flag.String("output", "", "A path to where the processed image should be written")
@@ -22,6 +27,18 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	// // Get the Role ARN
+	// awsRoleArn := "arn:aws:iam::297880250375:role/GoCourseLambdaUserReadWriteS3Rita"
+
+	// // Set up S3 session
+	// sess := session.Must(session.NewSession())
+
+	// creds := stscreds.NewCredentials(sess, awsRoleArn)
+
+	// // Create service client value configured for credentials
+	// // from assumed role.
+	// svc := s3.New(sess, &aws.Config{Credentials: creds})
 
 	records, err := ReadCsvFile("/inputs/input.csv", "url")
 	if err != nil {
@@ -54,3 +71,4 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
