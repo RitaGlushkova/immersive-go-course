@@ -23,5 +23,6 @@ develop: outputs
 	docker run -it \
 		--mount type=bind,source="$$(pwd)",target=/app \
 		--mount type=bind,source="/tmp",target=/tmp \
+		--mount type=bind,source="$$(pwd)/inputs",target=/inputs \
 		--mount type=bind,source="$$(pwd)/outputs",target=/outputs \
 		--rm develop

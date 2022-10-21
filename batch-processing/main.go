@@ -3,17 +3,11 @@ package main
 import (
 	"encoding/csv"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-
-	// "github.com/aws/aws-sdk-go/aws"
-	// "github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	// "github.com/aws/aws-sdk-go/aws/session"
-	// "github.com/aws/aws-sdk-go/service/s3"
+	"sync"
 )
-
 
 func main() {
 	
@@ -28,37 +22,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	// // Get the Role ARN
-	// awsRoleArn := "arn:aws:iam::297880250375:role/GoCourseLambdaUserReadWriteS3Rita"
-
-	// // Set up S3 session
-	// sess := session.Must(session.NewSession())
-
-	// creds := stscreds.NewCredentials(sess, awsRoleArn)
-
-	// // Create service client value configured for credentials
-	// // from assumed role.
-	// svc := s3.New(sess, &aws.Config{Credentials: creds})
-
 	records, err := ReadCsvFile("/inputs/input.csv", "url")
 	if err != nil {
 		log.Fatal(err)
 	}
 	outputRecords := make([][]string, len(records)-1)
-	outputRecords = append(outputRecords, []string{"url", "title"})
+	outputRecords = append(outputRecords, []string{"url", "input", "output"})
 	records = records[1:]
-	for i, record := range records {
-
-		row := Row {
-			url: record[0],
-			title: fmt.Sprintf("%s.%s", fmt.Sprint(i), "jpg"),
-		}
-		err := row.DownloadAndSaveImage(record[0], fmt.Sprint(i), *inputPath, *outputPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		outputRecords = append(outputRecords, []string{row.url, row.title})
+	var wg sync.WaitGroup
+	urlsChan := make(chan string)
+	inputPathsChan := make(chan ProcessDownloadImage)
+	outputPathsChan := make(chan ProcessUploadImage)
+	outputWriteChan := make (chan Row)
+	go DownloadImageS(urlsChan, inputPathsChan, *inputPath)
+	go ConvertImages(inputPathsChan, *outputPath, outputPathsChan)
+	go WriteIntoOutputSlice(outputPathsChan, outputWriteChan, &wg)
+	for _, record := range records {
+		wg.Add(1)
+		urlsChan <- record[0]
+		row := <- outputWriteChan
+		outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
 	}
+	close(urlsChan)
+	wg.Wait()
 	csvFile, err := os.Create(filepath.Join(*outputPath, "output.csv"))
 	if err != nil {
     log.Fatalf("failed creating file: %s", err)
@@ -69,6 +55,5 @@ func main() {
 	err = w.WriteAll(outputRecords)
 	if err != nil {
 		log.Fatal(err)
-	}
 }
-
+}
