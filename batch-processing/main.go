@@ -30,21 +30,26 @@ func main() {
 	outputRecords = append(outputRecords, []string{"url", "input", "output"})
 	records = records[1:]
 	var wg sync.WaitGroup
-	urlsChan := make(chan string)
-	inputPathsChan := make(chan ProcessDownloadImage)
+	urlsChan := make(chan string, 3)
+	inputPathsChan := make(chan ProcessDownloadImage, 3)
 	outputPathsChan := make(chan ProcessUploadImage)
 	outputWriteChan := make (chan Row)
+	for i:=0; i<3; i++ {
 	go DownloadImageS(urlsChan, inputPathsChan, *inputPath)
+	}
 	go ConvertImages(inputPathsChan, *outputPath, outputPathsChan)
 	go WriteIntoOutputSlice(outputPathsChan, outputWriteChan, &wg)
+
 	for _, record := range records {
 		wg.Add(1)
 		urlsChan <- record[0]
 		row := <- outputWriteChan
 		outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
-	}
+    }
+    
 	close(urlsChan)
 	wg.Wait()
+
 	csvFile, err := os.Create(filepath.Join(*outputPath, "output.csv"))
 	if err != nil {
     log.Fatalf("failed creating file: %s", err)
