@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
@@ -84,10 +85,9 @@ func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadIma
 	for url := range urlsChan {
 	d := DownloadImage(url, inputPath)
 	if d.err != nil {
-		fmt.Println(d.err, "ERROR IN DOWNLOAD")
-	}else {
-		inputPathsChan <- d}
-	}
+		fmt.Println(d.err, "ERROR IN DOWNLOAD")}
+		inputPathsChan <- d
+}
 }
 
 func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan ProcessUploadImage) {
@@ -95,9 +95,9 @@ func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, 
 		conv := ConvertImageIntoGreyScale(inputPath.filePath, outputPath, inputPath.url) 
 		if conv.err != nil{
 			fmt.Println(conv.err, "ERROR IN CONVERT")
-		}else {
-			outputPathsChan <- conv
 		}
+			outputPathsChan <- conv
+		
 	}
 }
 
