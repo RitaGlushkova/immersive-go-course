@@ -33,7 +33,7 @@ func main() {
 	urlsChan := make(chan string, 3)
 	inputPathsChan := make(chan ProcessDownloadImage, 3)
 	outputPathsChan := make(chan ProcessUploadImage)
-	outputWriteChan := make (chan Row)
+	outputWriteChan := make(chan Row)
 	for i:=0; i<3; i++ {
 	go DownloadImageS(urlsChan, inputPathsChan, *inputPath)
 	}
@@ -43,12 +43,14 @@ func main() {
 	for _, record := range records {
 		wg.Add(1)
 		urlsChan <- record[0]
-		row := <- outputWriteChan
-		outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
     }
     
 	close(urlsChan)
 	wg.Wait()
+
+	for row := range outputWriteChan {
+		outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
+    }
 
 	csvFile, err := os.Create(filepath.Join(*outputPath, "output.csv"))
 	if err != nil {

@@ -114,6 +114,10 @@ func WriteIntoOutputSlice(outputPathsChan chan ProcessUploadImage, outputWriteCh
 }
 
 func DownloadImage(url, inputPath string) ProcessDownloadImage {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("downloaded file in %s\n", time.Since(start))
+	}()
 	//make GET request to URL
     r, err := http.Get(url)
     if err != nil {
