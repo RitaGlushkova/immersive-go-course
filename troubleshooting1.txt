@@ -147,3 +147,18 @@ Change: 2022-10-12 12:20:26.256837017 +0000
  Birth: -
 
 // I can see it is a regular file. The name of the file also allows me to assume that it is probably is safe to delete.
+
+8. Can I try to delete this file without sudo. 
+- I attempted 
+rm -f foobar
+rm: cannot remove ‘foobar’: Permission denied
+- I also attempted to change permissions to the file using 
+> chmod -R 755 
+chmod: changing permissions of ‘foobar’: Operation not permitted
+- I tried to change my ownership to the file 
+> chown margarita foobar
+chown: changing ownership of ‘foobar’: Operation not permitted
+- I tried to create another dir and move my file there 
+> mkdir garbage
+mkdir: cannot create directory ‘garbage’: Permission denied
+
