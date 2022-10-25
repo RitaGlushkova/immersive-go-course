@@ -136,7 +136,7 @@ drwxr-xr-x  2 root   root              42 Oct 25 06:26 sa
 // Therefore it is protected, I won't be able to delete it without sudo permission. 
 // I still want to see more information about the file before I decide it is safe to delete. 
 
-7. stat foobar
+7. > stat foobar
   File: ‘foobar’
   Size: 6796869632	Blocks: 13275144   IO Block: 4096   regular file
 Device: ca01h/51713d	Inode: 12584498    Links: 1
@@ -145,10 +145,23 @@ Access: 2022-10-12 12:09:15.815662409 +0000
 Modify: 2022-10-12 12:20:26.256837017 +0000
 Change: 2022-10-12 12:20:26.256837017 +0000
  Birth: -
-
 // I can see it is a regular file. The name of the file also allows me to assume that it is probably is safe to delete.
 
-8. Can I try to delete this file without sudo. 
+8. > tail foobar
+Check what is inside the File
+It is a binary file. 
+// That's good to know but still want to check what type of file it is. 
+
+9. > file foobar
+foobar: DBase 3 data file with memo(s)
+// After a bit of investigation and asking Pedro what these types mean, we came to the conclusion 
+// that this file is a random file that is just created to take up space. 
+// Pedro showed me command "dd" that does that. My questions was, why we would ever need to create 
+// large random files. That is when I learnt that command "rm" doesn't actually remove the file.
+// It removes all the metadata about it. So in order to actually delete it, we create a file big enough to take up all space on our disk.
+// That seems like what was done with this foobar. 
+
+10. Can I try to delete this file without sudo??? 
 - I attempted 
 rm -f foobar
 rm: cannot remove ‘foobar’: Permission denied
@@ -161,4 +174,39 @@ chown: changing ownership of ‘foobar’: Operation not permitted
 - I tried to create another dir and move my file there 
 > mkdir garbage
 mkdir: cannot create directory ‘garbage’: Permission denied
+- I know I need permissions to delete it. Maybe they are in attributes
+> lsattr foobar
+---------------- foobar
+No special attributes to this file (e.c immutable
+- I also tried to check if there are any special rules applied to the file. No luck.
+> getfacl foobar
+# file: foobar
+# owner: root
+# group: root
+user::rw-
+group::r--
+other::r--
 
+11. After all these research I came to the conclusion that I need sudo.
+But if any processes are using this file, it will be deleted but space won't be freed up until process is killed.
+> lsof | grep foobar
+Does not display anything. 
+So no processed use it and it can be removed.
+> lsof foobar
+no result - file is not used by processes
+
+12. Deleting file 
+> sudo rm foobar
+
+13. Check again report file system disk space usage
+> df -h
+Filesystem      Size  Used Avail Use% Mounted on
+devtmpfs        474M     0  474M   0% /dev
+tmpfs           483M     0  483M   0% /dev/shm
+tmpfs           483M   37M  447M   8% /run
+tmpfs           483M     0  483M   0% /sys/fs/cgroup
+/dev/xvda1      8.0G  2.0G  6.1G  25% /
+tmpfs            97M     0   97M   0% /run/user/1001
+tmpfs            97M     0   97M   0% /run/user/0
+
+I can see /dev/xvda1      8.0G  2.0G  6.1G  25% / that 75% of space (6.1G) is now available. 
