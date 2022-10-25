@@ -1,0 +1,149 @@
+1. > df -h
+//report file system disk space usage
+
+Filesystem Type Size Used Avail Use% Mounted on
+devtmpfs devtmpfs 474M 0 474M 0% /dev
+tmpfs tmpfs 483M 0 483M 0% /dev/shm
+tmpfs tmpfs 483M 32M 452M 7% /run
+tmpfs tmpfs 483M 0 483M 0% /sys/fs/cgroup
+/dev/xvda1 xfs 8.0G 8.0G 16K 100% /
+tmpfs tmpfs 97M 0 97M 0% /run/user/0
+tmpfs tmpfs 97M 0 97M 0% /run/user/1001
+
+//First I want to check overall file system disk space usage. After running the command I can see that /dev/xvda1 is full (only 16K available).
+
+2. > lsblk
+
+// lsblk lists information about all available or the specified block devices.
+
+NAME MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+xvda 202:0 0 8G 0 disk
+└─xvda1 202:1 0 8G 0 part /
+
+// This command showed me how many partitions I have. Then I googled for any discussions where people talk about their root partition being full. 
+// I know that this is root because it starts with /dev and also mounted to the root "/". (https://unix.stackexchange.com/questions/615887/linux-root-directory-and-partition)
+// I attempted multiple commands such as fdisk and cfdisk. Both of them had "Permission denied". So it took a bit of googling around. People were referring to the directory "var".
+// Variable Directory (/var) The term 'var' is short for varible. 
+// Files that have an unexpected size and whose content is expected to change continuously (that's why it is named as variable) during normal operation of the system are stored here. 
+// For example, log files, spool files and cache files.
+// Logs seemed to be a reasonable place to check. So I needed to find out how to confirm or discard my hypothesis without sudo access.
+
+3. > du -h --max-depth 1 /var
+
+//du - Summarize disk usage of each FILE, recursively for directories.
+//-h, --human-readable print sizes in human readable format (e.g., 1K 234M 2G)
+// -d, --max-depth=N print the total for a directory (or file, with --all)
+   only if it is N or fewer levels below the command
+   line argument; --max-depth=0 is the same as
+   --summarize
+
+OUTPUT:
+du: cannot read directory ‘/var/cache/ldconfig’: Permission denied
+336M /var/cache
+du: cannot read directory ‘/var/log/audit’: Permission denied
+du: cannot read directory ‘/var/log/amazon/ssm’: Permission denied
+du: cannot read directory ‘/var/log/chrony’: Permission denied
+6.5G /var/log
+du: cannot read directory ‘/var/lib/machines’: Permission denied
+du: cannot read directory ‘/var/lib/rpcbind’: Permission denied
+du: cannot read directory ‘/var/lib/rsyslog’: Permission denied
+du: cannot read directory ‘/var/lib/gssproxy/clients’: Permission denied
+du: cannot read directory ‘/var/lib/gssproxy/rcache’: Permission denied
+du: cannot read directory ‘/var/lib/nfs/statd’: Permission denied
+du: cannot read directory ‘/var/lib/authconfig’: Permission denied
+du: cannot read directory ‘/var/lib/mlocate’: Permission denied
+du: cannot read directory ‘/var/lib/postfix’: Permission denied
+du: cannot read directory ‘/var/lib/amazon/ssm/ipc’: Permission denied
+du: cannot read directory ‘/var/lib/amazon/ssm/runtimeconfig’: Permission denied
+du: cannot read directory ‘/var/lib/chrony’: Permission denied
+28M /var/lib
+0 /var/adm
+du: cannot read directory ‘/var/db/sudo’: Permission denied
+0 /var/db
+du: cannot read directory ‘/var/empty/sshd’: Permission denied
+0 /var/empty
+0 /var/games
+0 /var/gopher
+0 /var/local
+0 /var/nis
+0 /var/opt
+0 /var/preserve
+du: cannot read directory ‘/var/spool/cron’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/active’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/bounce’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/corrupt’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/defer’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/deferred’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/flush’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/hold’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/incoming’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/maildrop’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/private’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/public’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/saved’: Permission denied
+du: cannot read directory ‘/var/spool/postfix/trace’: Permission denied
+du: cannot read directory ‘/var/spool/at’: Permission denied
+104K /var/spool
+du: cannot read directory ‘/var/tmp/systemd-private-44065311b501420bb9a1c62d099d92f7-chronyd.service-aB8ND0’: Permission denied
+0 /var/tmp
+0 /var/yp
+0 /var/kerberos
+0 /var/account
+6.9G /var
+
+// I eventually found the command to do so (listed above) and found out that /var/log 6.5G indeed take up most of the space. 
+// Next step it to check what is inside this directory, what type of logs and whether they are safe to be deleted.
+
+4. > cd /var/log
+5. > ls
+   > amazon boot.log btmp cloud-init.log cron dmesg.old grubby_prune_debug lastlog messages secure tallylog yum.log
+   > audit boot.log-20221012 chrony cloud-init-output.log dmesg foobar journal maillog sa spooler wtmp
+
+// ls command doesn't give me enough information about size and permissions. Therefore I need a better command for it. 
+
+6. > ls -lh
+// This command will show you the file sizes in human readable format.
+// Looks like this is what I need.
+
+total 6.4G
+drwxr-xr-x  3 root   root              17 Oct 11 11:25 amazon
+drwx------  2 root   root              23 Oct 11 11:24 audit
+-rw-------  1 root   root            9.0K Oct 25 07:35 boot.log
+-rw-------  1 root   root             13K Oct 12 11:14 boot.log-20221012
+-rw-------  1 root   utmp               0 Sep 14 21:01 btmp
+drwxr-x---  2 chrony chrony           174 Oct 12 11:14 chrony
+-rw-r--r--  1 root   root            189K Oct 25 06:26 cloud-init.log
+-rw-r-----  1 root   root            6.4K Oct 25 06:26 cloud-init-output.log
+-rw-------  1 root   root             12K Oct 25 07:35 cron
+-rw-r--r--  1 root   root             29K Oct 25 06:26 dmesg
+-rw-r--r--  1 root   root             29K Oct 11 11:24 dmesg.old
+-rw-r--r--  1 root   root            6.4G Oct 12 12:20 foobar
+-rw-r--r--  1 root   root             193 Sep 14 21:00 grubby_prune_debug
+drwxr-sr-x+ 3 root   systemd-journal   46 Oct 11 11:24 journal
+-rw-r--r--  1 root   root            287K Oct 25 09:09 lastlog
+-rw-------  1 root   root            8.0K Oct 25 07:35 maillog
+-rw-------  1 root   root            204K Oct 25 07:35 messages
+drwxr-xr-x  2 root   root              42 Oct 25 06:26 sa
+-rw-------  1 root   root             39K Oct 25 06:26 secure
+-rw-------  1 root   root               0 Sep 14 21:01 spooler
+-rw-------  1 root   root               0 Sep 14 21:00 tallylog
+-rw-rw-r--  1 root   utmp             20K Oct 25 09:09 wtmp
+-rw-------  1 root   root               0 Sep 14 21:03 yum.log
+
+// Now I can see that foobar has the size of 6.4G, which is what potentially need to be cleared up.
+// However I don't know anything about this foobar. I need more information. 
+// I do know that "-rw-r--r--" Only user has read and write permissions; the group and others can read only.
+// Therefore it is protected, I won't be able to delete it without sudo permission. 
+// I still want to see more information about the file before I decide it is safe to delete. 
+
+7. stat foobar
+  File: ‘foobar’
+  Size: 6796869632	Blocks: 13275144   IO Block: 4096   regular file
+Device: ca01h/51713d	Inode: 12584498    Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2022-10-12 12:09:15.815662409 +0000
+Modify: 2022-10-12 12:20:26.256837017 +0000
+Change: 2022-10-12 12:20:26.256837017 +0000
+ Birth: -
+
+// I can see it is a regular file. The name of the file also allows me to assume that it is probably is safe to delete.
