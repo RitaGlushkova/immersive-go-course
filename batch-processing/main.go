@@ -63,7 +63,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	csvFileErr, err := os.Create(filepath.Join(*outputPath, "outputErr.csv"))
+	csvFileErr, err := os.Create(filepath.Join(*outputPath, "failed.csv"))
 	if err != nil {
 		log.Fatalf("failed creating file: %s", err)
 	}
