@@ -33,11 +33,11 @@ type ProcessUploadImage struct {
 	err    error
 }
 
-// type RowError struct {
-// 	url     string
-// 	err     error
-// 	message string
-// }
+type RowError struct {
+	url     string
+	err     error
+	message string
+}
 
 type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error)
 
@@ -86,11 +86,11 @@ func ReadCsvFile(filename, headerTitle string) ([][]string, error) {
 	return records, nil
 }
 
-func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadImage, inputPath string, processingErrorChan chan error, wg *sync.WaitGroup) {
+func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadImage, inputPath string, processingErrorChan chan RowError, wg *sync.WaitGroup) {
 	for url := range urlsChan {
 		d := DownloadImage(url, inputPath)
 		if d.err != nil {
-			processingErrorChan <- d.err
+			processingErrorChan <- RowError{d.url, d.err, "couldn't download an image"}
 			wg.Done()
 		} else {
 			inputPathsChan <- d
@@ -98,11 +98,11 @@ func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadIma
 	}
 }
 
-func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan Row, processingErrorChan chan error, wg *sync.WaitGroup) {
+func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan Row, processingErrorChan chan RowError, wg *sync.WaitGroup) {
 	for inputPath := range inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath.input, outputPath, inputPath.url)
 		if conv.err != nil {
-			processingErrorChan <- conv.err
+			processingErrorChan <- RowError{conv.url, conv.err, "couldn't convert an image"}
 			wg.Done()
 		} else {
 			row := Row{
