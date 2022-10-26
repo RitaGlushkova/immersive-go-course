@@ -128,7 +128,7 @@ func DownloadImage(url, inputPath string) ProcessDownloadImage {
 	defer r.Body.Close()
 
 	//create file where to download content of url
-	inputFilepath := filepath.Join(inputPath, genFilepath("jpg"))
+	inputFilepath := filepath.Join("/tmp", genFilepath("jpg"))
 
 	// need to change to temp directory
 	file, err := os.Create(inputFilepath)
@@ -150,7 +150,7 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	// Set up imagemagick
 	imagick.Initialize()
 	defer imagick.Terminate()
-	outputFilepath := filepath.Join(outputPath, genFilepath("jpg"))
+	outputFilepath := filepath.Join("/tmp", fmt.Sprintf("%d-%d-out.jpg", time.Now().UnixMilli(), rand.Int()))
 	// Log what we're going to do
 	log.Printf("processing: %q to %q\n", inputFilepath, outputFilepath)
 
