@@ -4,6 +4,8 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+
+	//"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,42 +25,39 @@ func main() {
 		os.Exit(1)
 	}
 	records, err := ReadCsvFile(filepath.Join(*inputPath, "input.csv"), "url")
-	//fmt.Println(len(records))
 	if err != nil {
 		log.Fatal(err)
 	}
-	outputRecords := make([][]string, len(records))
+	outputRecords := make([][]string, 0)
 	outputRecords = append(outputRecords, []string{"url", "input", "output"})
 	records = records[1:]
 	var wg sync.WaitGroup
-	urlsChan := make(chan string)
+	urlsChan := make(chan string, 4)
 	processingErrorChan := make(chan error)
-	inputPathsChan := make(chan ProcessDownloadImage)
-	outputPathsChan := make(chan ProcessUploadImage)
-	//for i:=0; i<3; i++ {
+	inputPathsChan := make(chan ProcessDownloadImage, 4)
+	outputPathsChan := make(chan Row, 4)
 	go DownloadImageS(urlsChan, inputPathsChan, *inputPath, processingErrorChan, &wg)
-	//}
 	go ConvertImages(inputPathsChan, *outputPath, outputPathsChan, processingErrorChan, &wg)
 
 	for _, record := range records {
 		wg.Add(1)
 		urlsChan <- record[0]
+		select {
+		case err := <-processingErrorChan:
+			fmt.Println(err)
+		case row := <-outputPathsChan:
+			fmt.Println(row)
+			outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
+		}
 	}
 	wg.Wait()
-
-	select {
-	case err := <-processingErrorChan:
-		fmt.Println(err)
-	case row := <-outputPathsChan:
-		outputRecords = append(outputRecords, []string{row.url, row.input, row.output})
-	}
-
 	csvFile, err := os.Create(filepath.Join(*outputPath, "output.csv"))
 	if err != nil {
 		log.Fatalf("failed creating file: %s", err)
 	}
 	defer csvFile.Close()
 	w := csv.NewWriter(csvFile)
+	defer w.Flush()
 	err = w.WriteAll(outputRecords)
 	if err != nil {
 		log.Fatal(err)

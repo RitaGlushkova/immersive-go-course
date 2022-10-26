@@ -33,6 +33,12 @@ type ProcessUploadImage struct {
 	err    error
 }
 
+// type RowError struct {
+// 	url     string
+// 	err     error
+// 	message string
+// }
+
 type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error)
 
 type Converter struct {
@@ -85,26 +91,30 @@ func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadIma
 		d := DownloadImage(url, inputPath)
 		if d.err != nil {
 			processingErrorChan <- d.err
-			fmt.Println(d.err)
 			wg.Done()
+		} else {
+			inputPathsChan <- d
 		}
-		inputPathsChan <- d
 	}
 }
 
-func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan ProcessUploadImage, processingErrorChan chan error, wg *sync.WaitGroup) {
+func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan Row, processingErrorChan chan error, wg *sync.WaitGroup) {
 	for inputPath := range inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath.input, outputPath, inputPath.url)
 		if conv.err != nil {
 			processingErrorChan <- conv.err
-			fmt.Println(conv.err)
+			wg.Done()
+		} else {
+			row := Row{
+				url:    conv.url,
+				input:  conv.input,
+				output: conv.output,
+			}
+			outputPathsChan <- row
 			wg.Done()
 		}
-		outputPathsChan <- conv
-		wg.Done()
 	}
 }
-
 func DownloadImage(url, inputPath string) ProcessDownloadImage {
 	start := time.Now()
 	defer func() {
