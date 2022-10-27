@@ -403,3 +403,9 @@ Here's some extensions:
 - On upload, try to detect if completely useless alt-text has been supplied, and reject the request
 - On upload, have our server make sure the URL actually works and returns an image, and reject the request if it didn't
 - On upload, record the resolution of the fetched image in the database too, and return it in the JSON
+
+- check for invalid URL
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "White Cat", "url": "https://images.freeimages.com/images/previews/13e/my-c", "alt_text": "White cat sitting and looking to the left"}'
+
+- check if already exists
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "White Cat", "url": "https://images.freeimages.com/images/previews/13e/my-cat-1363423.jpg", "alt_text": "White cat sitting and looking to the left"}'

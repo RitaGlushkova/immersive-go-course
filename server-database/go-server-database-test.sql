@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS public.images
     title text NOT NULL,
     url text NOT NULL,
     alt_text text,
+    pixels int,
     PRIMARY KEY (id)
 );
 
-ALTER TABLE IF EXISTS public.images
-    OWNER to postgres;
+
 INSERT INTO public.images (title, url, alt_text) VALUES ('White Cat','https://images.freeimages.com/images/previews/13e/my-cat-1363423.jpg','White cat sitting and looking to the left'),('Catch a Ball','https://images.freeimages.com/images/large-previews/12a/dog-1361473.jpg','A dog jumping up catching a red ball');
