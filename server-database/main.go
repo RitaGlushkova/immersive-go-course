@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v4"
+	"github.com/joho/godotenv"
 )
 
 type Image struct {
@@ -26,9 +27,10 @@ type Server struct {
 }
 
 func main() {
+	godotenv.Load()
 	env := os.Getenv("DATABASE_URL")
 	if env == "" {
-		fmt.Fprintf(os.Stderr, "Environment variable is not set")
+		fmt.Fprintf(os.Stderr, "Environment variable is not set\n")
 		os.Exit(1)
 	}
 	conn, err := pgx.Connect(context.Background(), env)
@@ -56,27 +58,26 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		encoded, err := EncodedMarshalJSON(images, queryVal, os.Stderr)
+		imagesJsonInBytes, err := MarshalJSON(images, queryVal, os.Stderr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
+		w.Write(imagesJsonInBytes)
 	case "POST":
 		img, err := saveImage(s.conn, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		encoded, err := EncodedMarshalJSON(img, queryVal, os.Stderr)
+		imageJsonInBytes, err := MarshalJSON(img, queryVal, os.Stderr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(encoded))
+		w.Write(imageJsonInBytes)
 	default:
 		w.WriteHeader(405)
 		w.Write([]byte("Only GET and POST methods are available"))
@@ -84,17 +85,20 @@ func (s *Server) handlerImages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func EncodedMarshalJSON(data interface{}, queryVal string, diagnostics io.Writer) ([]byte, error) {
+// turns our struct into JSON
+func MarshalJSON(data interface{}, queryVal string, diagnostics io.Writer) ([]byte, error) {
 	indent, errIndent := strconv.Atoi(queryVal)
 	var marshalData []byte
 	var marshalErr error
 	if errIndent != nil {
-		//DO I WANT TO INFORM ABOUT IT ????
+		// how to inform the client?
+		fmt.Printf("")
+		indent = 2
 	}
 	if indent > 0 && indent < 15 && errIndent == nil {
-		marshalData, marshalErr = json.MarshalIndent(data, "", strings.Repeat(" ", indent))
+		marshalData, marshalErr = json.MarshalIndent(data, "", strings.Repeat(" ", indent)) //returns Json encoded value in []byte with indentation
 	} else {
-		marshalData, marshalErr = json.Marshal(data)
+		marshalData, marshalErr = json.Marshal(data) //returns Json encoded value in []byte
 	}
 	if marshalErr != nil {
 		fmt.Fprintf(diagnostics, "Couldn't proceed with Marshal: %v\n", marshalErr)
@@ -123,9 +127,11 @@ func FetchImages(conn *pgx.Conn) ([]Image, error) {
 }
 
 func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
+	//NewDecoder returns a new decoder that reads from r.
+	//The decoder introduces its own buffering and may read data from r beyond the JSON values requested.
 	decoder := json.NewDecoder(body)
 	var img Image
-	err := decoder.Decode(&img)
+	err := decoder.Decode(&img) //decodes and stores json.encoded value into var img (Image struct)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't decode input: %v\n", err)
 		return nil, err
@@ -136,4 +142,3 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 	}
 	return &img, nil
 }
-
