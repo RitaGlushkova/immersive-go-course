@@ -93,11 +93,9 @@ func MarshalJSON(data interface{}, queryVal string, diagnostics io.Writer) ([]by
 	var marshalData []byte
 	var marshalErr error
 	if errIndent != nil {
-		// how to inform the client?
-		fmt.Printf("")
-		indent = 2
+		fmt.Println(errIndent, "default indent will be set to 0")
 	}
-	if indent > 0 && indent < 15 && errIndent == nil {
+	if indent > 0 && indent < 15 {
 		marshalData, marshalErr = json.MarshalIndent(data, "", strings.Repeat(" ", indent)) //returns Json encoded value in []byte with indentation
 	} else {
 		marshalData, marshalErr = json.Marshal(data) //returns Json encoded value in []byte
@@ -156,7 +154,6 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 	}
 	// The resolution is height x width
 	img.Pixels = config.Height * config.Width
-	fmt.Println(img.Pixels)
 	//check if URL exists already
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("invalid URL link image won't be saved: %v", err)
@@ -184,7 +181,6 @@ func saveImage(conn *pgx.Conn, body io.Reader) (*Image, error) {
 
 func compareTitleAndAltText(altText, title string) int {
 	a := strings.Split(altText, " ")
-	fmt.Println(a)
 	count := 0
 	for _, v := range a {
 		if strings.Contains(strings.ToLower(title), strings.ToLower(v)) {

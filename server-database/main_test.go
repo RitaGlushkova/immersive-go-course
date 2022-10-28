@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/jackc/pgx/v4"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
-
-	"github.com/jackc/pgx/v4"
-	"github.com/stretchr/testify/require"
 )
 
 var TEST_DB_URL = "postgres://localhost:5432/go-server-database-test"
@@ -137,7 +136,6 @@ func TestEncode(t *testing.T) {
 	_, err := MarshalJSON(make(chan int), "+", errBuf)
 	expected := "couldn't proceed with Marshal:"
 	got := errBuf.String()
-	//fmt.Println(got)
 	require.Contains(t, got, expected)
 	require.Error(t, err)
 }

@@ -404,8 +404,19 @@ Here's some extensions:
 - On upload, have our server make sure the URL actually works and returns an image, and reject the request if it didn't
 - On upload, record the resolution of the fetched image in the database too, and return it in the JSON
 
+- get all images with indent 2
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i
+
+- post image
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "Cat", "alt_text": "A cool cat", "url": "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80"}'
+
+- get all images with incorrect indent
+  ~ curl 'http://localhost:8080/images.json?indent=jkl' -i
 - check for invalid URL
   ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "White Cat", "url": "https://images.freeimages.com/images/previews/13e/my-c", "alt_text": "White cat sitting and looking to the left"}'
 
+- check if alt_text is not good
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "White Cat", "url": "https://images.freeimages.com/images/previews/13e/my-cat-1363423.jpg", "alt_text": "sitting and looking to the left"}'
+
 - check if already exists
-  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "White Cat", "url": "https://images.freeimages.com/images/previews/13e/my-cat-1363423.jpg", "alt_text": "White cat sitting and looking to the left"}'
+  ~ curl 'http://localhost:8080/images.json?indent=2' -i --data '{"title": "Cat", "alt_text": "A cool cat", "url": "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1000&q=80"}'
