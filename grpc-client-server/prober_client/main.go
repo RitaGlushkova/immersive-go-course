@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"time"
 
 	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
 	"google.golang.org/grpc"
@@ -12,7 +13,9 @@ import (
 )
 
 var (
-	addr = flag.String("addr", "localhost:50051", "the address to connect to")
+	addr        = flag.String("addr", "localhost:50051", "the address to connect to")
+	endpoint    = flag.String("endpoint", "http://www.google.com", "defines endpoint")
+	numberOfReq = flag.Int64("n", 1, "number of requests to make")
 )
 
 func main() {
@@ -24,15 +27,13 @@ func main() {
 	}
 	defer conn.Close()
 	c := pb.NewProberClient(conn)
-
+	duration := 1 * time.Second
 	// Contact the server and print out its response.
-	ctx := context.Background() // TODO: add a timeout
-
-	// TODO: endpoint should be a flag
-	// TODO: add number of times to probe
-	r, err := c.DoProbes(ctx, &pb.ProbeRequest{Endpoint: "http://www.google.com"})
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	r, err := c.DoProbes(ctx, &pb.ProbeRequest{Endpoint: *endpoint, NumberOfRequestsToMake: *numberOfReq})
 	if err != nil {
 		log.Fatalf("could not probe: %v", err)
 	}
-	log.Printf("Response Time: %f", r.GetLatencyMsecs())
+	log.Printf("Average Latency for %d request(s) is %v milliseconds. %v", *numberOfReq, r.GetAverageLatencyMsecs(), r.Replies)
 }
