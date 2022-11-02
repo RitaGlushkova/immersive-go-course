@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
+	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
@@ -44,12 +44,12 @@ func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeRe
 			reply.ErrorMessage = fmt.Sprintf("Error: %v, request number %d", err, i)
 		} else {
 			reply.ReplyCode = int64(res.StatusCode)
-			elapsed := time.Since(start)
-			elapsedMsecs := float32(elapsed / time.Millisecond)
-			reply.LatencyMsecs = elapsedMsecs
-			LatencyGauge.WithLabelValues(in.GetEndpoint()).Set(float64(elapsedMsecs))
-			sumOfelapsedMsecs += elapsedMsecs
 		}
+		elapsed := time.Since(start)
+		elapsedMsecs := float32(elapsed / time.Millisecond)
+		reply.LatencyMsecs = elapsedMsecs
+		LatencyGauge.WithLabelValues(in.GetEndpoint()).Set(float64(elapsedMsecs))
+		sumOfelapsedMsecs += elapsedMsecs
 		replies = append(replies, &reply)
 	}
 	averageLatencyMsecs := sumOfelapsedMsecs / float32(numberOfRepeats)

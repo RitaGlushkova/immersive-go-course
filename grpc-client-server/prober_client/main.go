@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
+	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
