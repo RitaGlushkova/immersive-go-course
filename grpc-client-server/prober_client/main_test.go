@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"net"
@@ -64,10 +65,26 @@ func TestDoProbes(t *testing.T) {
 			defer conn.Close()
 			client := pb.NewProberClient(conn)
 			resp, err := client.DoProbes(context.Background(), tt.req)
-			require.NoError(t, err)
-			for i := 0; i < int(tt.req.NumberOfRequestsToMake); i++ {
-				require.Equal(t, tt.replyCode, resp.Replies[i].ReplyCode)
+
+			if name == "success" {
+				var buf bytes.Buffer
+				log.SetOutput(&buf)
+				ProbeLog(client, tt.req)
+				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6  reply_code:200"
+				got := buf.String()
+				require.Contains(t, got, want)
+				require.NoError(t, err)
+				require.Equal(t, float32(6), resp.AverageLatencyMsecs)
 			}
+			if name == "failed" {
+				var buf bytes.Buffer
+				log.SetOutput(&buf)
+				ProbeLog(client, tt.req)
+				got := buf.String()
+				want := `Average Latency for 1 request(s) is 3 milliseconds. [latency_msecs:3  error_message:"Error: Get \"https://www.goog/\""`
+				require.Contains(t, got, want)
+			}
+			require.Equal(t, tt.replyCode, resp.Replies[0].ReplyCode)
 		},
 		)
 	}
@@ -75,13 +92,20 @@ func TestDoProbes(t *testing.T) {
 
 func (*MockProbeServer) DoProbes(ctx context.Context, req *pb.ProbeRequest) (*pb.ProbeReply, error) {
 	if req.Endpoint == "https://www.goog" {
-		return nil, grpc.Errorf(15, "error")
+		return &pb.ProbeReply{
+			AverageLatencyMsecs: float32(3),
+			Replies: []*pb.Reply{{
+				LatencyMsecs: float32(3),
+				ErrorMessage: "Error: Get \"https://www.goog/\"",
+				ReplyCode:    0,
+			}}}, nil
+	} else {
+		return &pb.ProbeReply{
+			AverageLatencyMsecs: float32(6),
+			Replies: []*pb.Reply{{
+				LatencyMsecs: float32(6),
+				ErrorMessage: "",
+				ReplyCode:    200,
+			}}}, nil
 	}
-	return &pb.ProbeReply{
-		AverageLatencyMsecs: float32(6),
-		Replies: []*pb.Reply{{
-			LatencyMsecs: float32(6),
-			ErrorMessage: "",
-			ReplyCode:    200,
-		}}}, nil
 }

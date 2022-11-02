@@ -27,11 +27,16 @@ func main() {
 	}
 	defer conn.Close()
 	c := pb.NewProberClient(conn)
-	duration := 1 * time.Second
+	ProbeLog(c, &pb.ProbeRequest{Endpoint: *endpoint, NumberOfRequestsToMake: *numberOfReq})
 	// Contact the server and print out its response.
+
+}
+
+func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) {
+	duration := 1 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	r, err := c.DoProbes(ctx, &pb.ProbeRequest{Endpoint: *endpoint, NumberOfRequestsToMake: *numberOfReq})
+	r, err := c.DoProbes(ctx, req)
 	if err != nil {
 		log.Fatalf("could not probe: %v", err)
 	}
