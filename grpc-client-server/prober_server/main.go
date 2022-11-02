@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
+	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
@@ -60,7 +60,7 @@ func init() {
 	prometheus.MustRegister(LatencyGauge)
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe("localhost:9090", nil)
+		http.ListenAndServe(":2112", nil)
 	}()
 }
 
