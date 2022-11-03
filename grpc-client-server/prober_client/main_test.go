@@ -66,7 +66,8 @@ func TestDoProbes(t *testing.T) {
 			client := pb.NewProberClient(conn)
 			var buf bytes.Buffer
 			log.SetOutput(&buf)
-			resp := ProbeLog(client, tt.req)
+			resp, err := ProbeLog(client, tt.req)
+			require.NoError(t, err)
 			if name == "success" {
 				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6  reply_code:200"
 				got := buf.String()

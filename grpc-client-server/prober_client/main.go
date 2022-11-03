@@ -29,18 +29,20 @@ func main() {
 	c := pb.NewProberClient(conn)
 
 	// Contact the server and print out its response.
-	ProbeLog(c, &pb.ProbeRequest{Endpoint: *endpoint, NumberOfRequestsToMake: *numberOfReq})
+	_, err = ProbeLog(c, &pb.ProbeRequest{Endpoint: *endpoint, NumberOfRequestsToMake: *numberOfReq})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) *pb.ProbeReply {
+func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) (*pb.ProbeReply, error) {
 	duration := 1 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	resp, err := c.DoProbes(ctx, req)
 	if err != nil {
-		log.Fatalf("could not probe: %v", err)
-		return nil
+		return nil, grpc.Errorf(13, "could not probe: %v", err)
 	}
 	log.Printf("Average Latency for %d request(s) is %v milliseconds. %v", *numberOfReq, resp.GetAverageLatencyMsecs(), resp.Replies)
-	return resp
+	return resp, nil
 }
