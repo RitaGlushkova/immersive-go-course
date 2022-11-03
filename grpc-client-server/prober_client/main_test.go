@@ -69,7 +69,7 @@ func TestDoProbes(t *testing.T) {
 			require.NoError(t, err)
 			resp, err := ProbeLog(client, tt.req)
 			if name == "success" {
-				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6 reply_code:200]"
+				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6  reply_code:200]"
 				got := buf.String()
 				require.Contains(t, got, want)
 				require.NoError(t, err)
