@@ -1,4 +1,4 @@
-module github.com/CodeYourFuture/immersive-go-course/grpc-client-server
+module github.com/RitaGlushkova/immersive-go-course/grpc-client-server
 
 go 1.19
 

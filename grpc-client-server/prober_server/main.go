@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
+	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
