@@ -66,11 +66,10 @@ func TestDoProbes(t *testing.T) {
 			client := pb.NewProberClient(conn)
 			var buf bytes.Buffer
 			log.SetOutput(&buf)
-			resp, err := client.DoProbes(context.Background(), tt.req)
 			require.NoError(t, err)
-			ProbeLog(client, tt.req)
+			resp, err := ProbeLog(client, tt.req)
 			if name == "success" {
-				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6  reply_code:200"
+				want := "Average Latency for 1 request(s) is 6 milliseconds. [latency_msecs:6 reply_code:200]"
 				got := buf.String()
 				require.Contains(t, got, want)
 				require.NoError(t, err)
@@ -78,7 +77,7 @@ func TestDoProbes(t *testing.T) {
 			}
 			if name == "failed" {
 				got := buf.String()
-				want := `Average Latency for 1 request(s) is 3 milliseconds. [latency_msecs:3  error_message:"Error: Get \"https://www.goog/\""`
+				want := `error_message:"Error: Get \"https://www.goog/\""`
 				require.Contains(t, got, want)
 			}
 			require.Equal(t, tt.replyCode, resp.Replies[0].ReplyCode)
