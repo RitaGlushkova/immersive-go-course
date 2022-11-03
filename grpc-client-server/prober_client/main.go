@@ -10,6 +10,7 @@ import (
 	pb "github.com/CodeYourFuture/immersive-go-course/grpc-client-server/prober"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -41,7 +42,7 @@ func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) (*pb.ProbeReply, error) {
 	defer cancel()
 	resp, err := c.DoProbes(ctx, req)
 	if err != nil {
-		return nil, grpc.Errorf(13, "could not probe: %v", err)
+		return nil, status.Errorf(13, "could not probe: %v", err)
 	}
 	log.Printf("Average Latency for %d request(s) is %v milliseconds. %v", *numberOfReq, resp.GetAverageLatencyMsecs(), resp.Replies)
 	return resp, nil
