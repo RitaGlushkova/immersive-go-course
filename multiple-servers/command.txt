@@ -1,0 +1,4 @@
+from main dir > docker build -t nginx -f config/Dockerfile .
+> docker run nginx
+> cd cmd/static-server > go run .
+from main dir > DATABASE_URL='postgres://localhost:5432/go-server-database' go run ./cmd/api-server --port 8081
