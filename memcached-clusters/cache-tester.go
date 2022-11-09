@@ -66,11 +66,16 @@ func main() {
 	}
 
 	//Printing result and also a potential unexpected set up
-	if overview.errCount == (len(memcachePorts)-1) && len(overview.value) == 1 {
-		fmt.Printf("caches are operating in sharded mode. Number of cache miss: %d, Values from cache: %v\n", overview.errCount, overview.value)
-	} else if overview.errCount == 0 && len(overview.value) == len(memcachePorts) {
-		fmt.Printf("caches are operating in replicated mode. Number of cache miss: %d, Values from cache: %v\n", overview.errCount, overview.value)
+	result := CheckCacheMode(overview, memcachePorts)
+	log.Println(result)
+}
+
+func CheckCacheMode(overview Overview, nodes []int) string {
+	if overview.errCount == (len(nodes)-1) && len(overview.value) == 1 {
+		return fmt.Sprintf("caches are operating in sharded mode. Number of cache miss: %d, Values from cache: %v\n", overview.errCount, overview.value)
+	} else if overview.errCount == 0 && len(overview.value) == len(nodes) {
+		return fmt.Sprintf("caches are operating in replicated mode. Number of cache miss: %d, Values from cache: %v\n", overview.errCount, overview.value)
 	} else {
-		fmt.Printf("caches are not operating correctly. Number of cache miss: %d. Values from cache: %v\n", overview.errCount, overview.value)
+		return fmt.Sprintf("caches are not operating correctly. Number of cache miss: %d. Values from cache: %v\n", overview.errCount, overview.value)
 	}
 }
