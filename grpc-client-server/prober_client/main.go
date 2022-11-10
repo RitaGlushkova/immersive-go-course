@@ -37,7 +37,7 @@ func main() {
 }
 
 func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) (*pb.ProbeReply, error) {
-	duration := 1 * time.Second
+	duration := 3 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	resp, err := c.DoProbes(ctx, req)

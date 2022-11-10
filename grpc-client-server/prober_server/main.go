@@ -35,7 +35,7 @@ type server struct {
 func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeReply, error) {
 	var sumOfelapsedMsecs = float32(0)
 	numberOfRepeats := in.GetNumberOfRequestsToMake()
-	var replies = make([]*pb.Reply, 0)
+	var replies = make([]*pb.Reply, numberOfRepeats)
 	for i := 0; i < int(numberOfRepeats); i++ {
 		var reply pb.Reply
 		start := time.Now()
