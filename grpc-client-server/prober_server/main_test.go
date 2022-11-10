@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"testing"
 
 	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
@@ -62,9 +64,48 @@ func TestDoProbes(t *testing.T) {
 			resp, err := client.DoProbes(context.Background(), tt.req)
 			require.NoError(t, err)
 			for i := 0; i < int(tt.req.NumberOfRequestsToMake); i++ {
+				fmt.Println(resp.Replies[i])
 				require.Equal(t, tt.replyCode, resp.Replies[i].ReplyCode)
 			}
 		},
 		)
 	}
+}
+
+func XTestSomething(t *testing.T) {
+	var largeNumber = 12345
+	fmt.Println(largeNumber)
+
+	var floatNumber = float64(largeNumber / 100)
+	require.Equal(t, 123.45, floatNumber)
+
+}
+
+// test for a port to listen
+
+// given the port is busy when we try to start it it will fail - return error
+
+func TestSetPrometheusWhenPortBusy(t *testing.T) {
+	// make port we are testing for busy
+	lis, err := net.Listen("tcp", ":2112")
+	require.NoError(t, err)
+	defer lis.Close()
+	// call our function, which we are testing
+	err = setupPrometheus()
+	// expect to return an error
+	require.Error(t, err)
+}
+
+func TestSetPrometheusWhenPortAvail(t *testing.T) {
+
+	// call our function, which we are testing
+	err := setupPrometheus()
+	// expect to return an error
+	require.NoError(t, err)
+
+	//make request to the port
+	res, err := http.Get("http://localhost:2112/metrics")
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode)
+	// assert that some metrics are returner
 }

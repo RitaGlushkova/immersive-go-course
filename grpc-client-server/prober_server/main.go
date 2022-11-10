@@ -55,16 +55,38 @@ func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeRe
 	averageLatencyMsecs := sumOfelapsedMsecs / float32(numberOfRepeats)
 	return &pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies}, nil
 }
+
 func init() {
 	// Metrics have to be registered to be exposed:
+	//It only can be run once !!
 	prometheus.MustRegister(LatencyGauge)
+	http.Handle("/metrics", promhttp.Handler())
+}
+func setupPrometheus() error {
+	//start a timer
+	errChan := make(chan error)
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(":2112", nil)
+		err := http.ListenAndServe(":2112", nil)
+		if err != nil {
+			errChan <- err
+		}
 	}()
+	//select races things against each other and returns the quickest
+	select {
+	case err := <-errChan:
+		return err
+
+	// if in one second err is not returned from errChan it will write from this chanel.
+	case <-time.After(1 * time.Second):
+		return nil
+	}
 }
 
 func main() {
+	err := setupPrometheus()
+	if err != nil {
+		log.Fatal("Failed to listen on port :2112", err)
+	}
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
