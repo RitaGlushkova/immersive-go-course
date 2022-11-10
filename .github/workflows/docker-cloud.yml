@@ -1,0 +1,57 @@
+name: Docker cloud test and deploy
+on: [push]
+defaults:
+  run:
+    working-directory: docker-cloud
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: "docker-cloud/go.mod"
+          cache-dependency-path: docker-cloud/go.sum
+          cache: true
+
+      - name: Build
+        run: docker build -t docker-cloud:latest .
+
+      - name: Test
+        run: go test -v ./...
+
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::297880250375:role/GitHubActionECRPublicPushImage
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+
+      - name: Build, tag, and push docker image to Amazon ECR Public
+        env:
+          REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+          REGISTRY_ALIAS: b8c6e9l3
+          REPOSITORY: immersive-go-course/docker-cloud-rita
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
