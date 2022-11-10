@@ -222,10 +222,9 @@ and which is a symbolic link to the actual file. Thus, 0
 is standard input, 1 standard output, 2 standard error,
 and so on.
 
-To be able to truncate a file, you need to have write permissions on the file. Usually, you would use sudo for this, but the elevated root privileges do not apply to the redirection.
-https://linuxize.com/post/truncate-files-in-linux/#:~:text=Truncating%20a%20file%20is%20much,that%20uses%20it%20to%20malfunction.
-
 We can see that this is file descriptor 3 pointing to our file.
+Our shell script in findme deleted the file $TMP. But because the process is in infinite loop it is not actually deleted. If we don't want to kill process, we somehow need to make this file 0. Because the file is "deleted" we can only point to file descriptor and tell it to be empty? That is why instead of truncate -s 0 /home/margarita/$TMP
+we do:
 
 ~ truncate -s 0 /proc/14545/fd/3
 ~ df -h
