@@ -12,14 +12,14 @@ import (
 )
 
 func TestEndpoints(t *testing.T) {
-	t.Run("testing index handler", func(t *testing.T){
+	t.Run("testing index handler", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/", nil)
 		response := httptest.NewRecorder()
 		indexHandler(response, request)
 		assertStatus(t, response.Code, 200)
 		assertResponseBody(t, response.Body.String(), "Hello, world.")
 	})
-	t.Run("testing ping handler", func(t *testing.T){
+	t.Run("testing ping handler", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/ping", nil)
 		response := httptest.NewRecorder()
 		pingHandler(response, request)
@@ -28,7 +28,7 @@ func TestEndpoints(t *testing.T) {
 	})
 }
 
-func TestRespondsWithHello(t *testing.T) {
+func TestMain(t *testing.T) {
 
 	//New connection to Docker
 	pool, err := dockertest.NewPool("")
@@ -63,7 +63,6 @@ func TestRespondsWithHello(t *testing.T) {
 
 	require.Contains(t, string(body), "Hello", "does not greet ?")
 }
-
 
 func assertStatus(t testing.TB, got, want int) {
 	t.Helper()
