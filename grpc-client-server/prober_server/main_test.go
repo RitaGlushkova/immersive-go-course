@@ -5,32 +5,44 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
+	//"net/http"
 	"testing"
 
 	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 )
 
-const bufSize = 1024 * 1024
+func setNewServer(ctx context.Context) (pb.ProberClient, func()) {
+	buffer := 101024 * 1024
+	lis := bufconn.Listen(buffer)
 
-var lis *bufconn.Listener
-
-func init() {
-	lis = bufconn.Listen(bufSize)
-	s := grpc.NewServer()
-	pb.RegisterProberServer(s, &server{})
+	baseServer := grpc.NewServer()
+	pb.RegisterProberServer(baseServer, &server{})
 	go func() {
-		if err := s.Serve(lis); err != nil {
-			log.Fatal(err)
+		if err := baseServer.Serve(lis); err != nil {
+			log.Printf("error serving server: %v", err)
 		}
 	}()
-}
+	conn, err := grpc.DialContext(ctx, "",
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return lis.Dial()
+		}), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("error connecting to server: %v", err)
+	}
 
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
+	closer := func() {
+		err := lis.Close()
+		if err != nil {
+			log.Printf("error closing listener: %v", err)
+		}
+		baseServer.Stop()
+	}
+	client := pb.NewProberClient(conn)
+	return client, closer
 }
 
 type Test struct {
@@ -57,10 +69,9 @@ func TestDoProbes(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
-			require.NoError(t, err)
-			defer conn.Close()
-			client := pb.NewProberClient(conn)
+			ctx := context.Background()
+			client, closer := setNewServer(ctx)
+			defer closer()
 			resp, err := client.DoProbes(context.Background(), tt.req)
 			require.NoError(t, err)
 			for i := 0; i < int(tt.req.NumberOfRequestsToMake); i++ {
@@ -85,27 +96,27 @@ func XTestSomething(t *testing.T) {
 
 // given the port is busy when we try to start it it will fail - return error
 
-func TestSetPrometheusWhenPortBusy(t *testing.T) {
-	// make port we are testing for busy
-	lis, err := net.Listen("tcp", ":2112")
-	require.NoError(t, err)
-	defer lis.Close()
-	// call our function, which we are testing
-	err = setupPrometheus()
-	// expect to return an error
-	require.Error(t, err)
-}
+// func TestSetPrometheusWhenPortBusy(t *testing.T) {
+// 	// make port we are testing for busy
+// 	lis, err := net.Listen("tcp", ":2112")
+// 	require.NoError(t, err)
+// 	defer lis.Close()
+// 	// call our function, which we are testing
+// 	err = setupPrometheus()
+// 	// expect to return an error
+// 	require.Error(t, err)
+// }
 
-func TestSetPrometheusWhenPortAvail(t *testing.T) {
+// func TestSetPrometheusWhenPortAvail(t *testing.T) {
 
-	// call our function, which we are testing
-	err := setupPrometheus()
-	// expect to return an error
-	require.NoError(t, err)
+// 	// call our function, which we are testing
+// 	err := setupPrometheus()
+// 	// expect to return an error
+// 	require.NoError(t, err)
 
-	//make request to the port
-	res, err := http.Get("http://localhost:2112/metrics")
-	require.NoError(t, err)
-	require.Equal(t, 200, res.StatusCode)
-	// assert that some metrics are returner
-}
+// 	//make request to the port
+// 	res, err := http.Get("http://localhost:2112/metrics")
+// 	require.NoError(t, err)
+// 	require.Equal(t, 200, res.StatusCode)
+// 	// assert that some metrics are returner
+// }

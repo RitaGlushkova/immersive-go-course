@@ -35,7 +35,7 @@ type server struct {
 func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeReply, error) {
 	var sumOfelapsedMsecs = float32(0)
 	numberOfRepeats := in.GetNumberOfRequestsToMake()
-	var replies = make([]*pb.Reply, numberOfRepeats)
+	var replies = make([]*pb.Reply, 0)
 	for i := 0; i < int(numberOfRepeats); i++ {
 		var reply pb.Reply
 		start := time.Now()
@@ -53,6 +53,7 @@ func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeRe
 		replies = append(replies, &reply)
 	}
 	averageLatencyMsecs := sumOfelapsedMsecs / float32(numberOfRepeats)
+	fmt.Println(&pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies})
 	return &pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies}, nil
 }
 
@@ -61,32 +62,34 @@ func init() {
 	//It only can be run once !!
 	prometheus.MustRegister(LatencyGauge)
 	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(":2112", nil)
 }
-func setupPrometheus() error {
-	//start a timer
-	errChan := make(chan error)
-	go func() {
-		err := http.ListenAndServe(":2112", nil)
-		if err != nil {
-			errChan <- err
-		}
-	}()
-	//select races things against each other and returns the quickest
-	select {
-	case err := <-errChan:
-		return err
 
-	// if in one second err is not returned from errChan it will write from this chanel.
-	case <-time.After(1 * time.Second):
-		return nil
-	}
-}
+// func setupPrometheus() error {
+// 	//start a timer
+// 	errChan := make(chan error)
+// 	go func() {
+// 		err := http.ListenAndServe(":2112", nil)
+// 		if err != nil {
+// 			errChan <- err
+// 		}
+// 	}()
+// 	//select races things against each other and returns the quickest
+// 	select {
+// 	case err := <-errChan:
+// 		return err
+
+// 	// if in one second err is not returned from errChan it will write from this chanel.
+// 	case <-time.After(1 * time.Second):
+// 		return nil
+// 	}
+// }
 
 func main() {
-	err := setupPrometheus()
-	if err != nil {
-		log.Fatal("Failed to listen on port :2112", err)
-	}
+	//err := setupPrometheus()
+	// if err != nil {
+	// 	log.Fatal("Failed to listen on port :2112", err)
+	// }
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
