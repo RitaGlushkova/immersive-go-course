@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	//"fmt"
 	"fmt"
 	"log"
 	"net"
-	//"net/http"
+	"net/http"
 	"testing"
 
 	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
@@ -75,7 +76,6 @@ func TestDoProbes(t *testing.T) {
 			resp, err := client.DoProbes(context.Background(), tt.req)
 			require.NoError(t, err)
 			for i := 0; i < int(tt.req.NumberOfRequestsToMake); i++ {
-				fmt.Println(resp.Replies[i])
 				require.Equal(t, tt.replyCode, resp.Replies[i].ReplyCode)
 			}
 		},
@@ -83,40 +83,37 @@ func TestDoProbes(t *testing.T) {
 	}
 }
 
-func XTestSomething(t *testing.T) {
-	var largeNumber = 12345
+func TestSomething(t *testing.T) {
+	var largeNumber = float64(12345)
 	fmt.Println(largeNumber)
 
-	var floatNumber = float64(largeNumber / 100)
+	var floatNumber = largeNumber / 100
+	fmt.Println(floatNumber)
 	require.Equal(t, 123.45, floatNumber)
 
 }
 
-// test for a port to listen
+func TestSetPrometheusWhenPortBusy(t *testing.T) {
+	// make port we are testing for busy
+	lis, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	defer lis.Close()
+	// call our function, which we are testing
+	_, err = setupPrometheus(lis.Addr().(*net.TCPAddr).Port)
+	// expect to return an error
+	require.Error(t, err)
+}
 
-// given the port is busy when we try to start it it will fail - return error
+func TestSetPrometheusWhenPortAvail(t *testing.T) {
 
-// func TestSetPrometheusWhenPortBusy(t *testing.T) {
-// 	// make port we are testing for busy
-// 	lis, err := net.Listen("tcp", ":2112")
-// 	require.NoError(t, err)
-// 	defer lis.Close()
-// 	// call our function, which we are testing
-// 	err = setupPrometheus()
-// 	// expect to return an error
-// 	require.Error(t, err)
-// }
+	// call our function, which we are testing
+	port, err := setupPrometheus(0)
+	// expect to return an error
+	require.NoError(t, err)
 
-// func TestSetPrometheusWhenPortAvail(t *testing.T) {
-
-// 	// call our function, which we are testing
-// 	err := setupPrometheus()
-// 	// expect to return an error
-// 	require.NoError(t, err)
-
-// 	//make request to the port
-// 	res, err := http.Get("http://localhost:2112/metrics")
-// 	require.NoError(t, err)
-// 	require.Equal(t, 200, res.StatusCode)
-// 	// assert that some metrics are returner
-// }
+	//make request to the port
+	res, err := http.Get(fmt.Sprintf("http://localhost:%v/metrics", port))
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode)
+	// assert that some metrics are returner
+}

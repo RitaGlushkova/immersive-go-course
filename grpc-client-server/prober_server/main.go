@@ -27,7 +27,6 @@ var (
 		})
 )
 
-// server is used to implement prober.ProberServer.
 type server struct {
 	pb.UnimplementedProberServer
 }
@@ -46,14 +45,14 @@ func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeRe
 			reply.ReplyCode = int64(res.StatusCode)
 		}
 		elapsed := time.Since(start)
-		elapsedMsecs := float32(elapsed / time.Millisecond)
+		elapsedMsecs := float32(elapsed) / float32(time.Millisecond)
 		reply.LatencyMsecs = elapsedMsecs
+
 		LatencyGauge.WithLabelValues(in.GetEndpoint()).Set(float64(elapsedMsecs))
 		sumOfelapsedMsecs += elapsedMsecs
 		replies = append(replies, &reply)
 	}
 	averageLatencyMsecs := sumOfelapsedMsecs / float32(numberOfRepeats)
-	fmt.Println(&pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies})
 	return &pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies}, nil
 }
 
@@ -62,34 +61,22 @@ func init() {
 	//It only can be run once !!
 	prometheus.MustRegister(LatencyGauge)
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":2112", nil)
 }
 
-// func setupPrometheus() error {
-// 	//start a timer
-// 	errChan := make(chan error)
-// 	go func() {
-// 		err := http.ListenAndServe(":2112", nil)
-// 		if err != nil {
-// 			errChan <- err
-// 		}
-// 	}()
-// 	//select races things against each other and returns the quickest
-// 	select {
-// 	case err := <-errChan:
-// 		return err
-
-// 	// if in one second err is not returned from errChan it will write from this chanel.
-// 	case <-time.After(1 * time.Second):
-// 		return nil
-// 	}
-// }
+func setupPrometheus(port int) (int, error) {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return 0, err
+	}
+	go http.Serve(lis, nil)
+	return lis.Addr().(*net.TCPAddr).Port, nil
+}
 
 func main() {
-	//err := setupPrometheus()
-	// if err != nil {
-	// 	log.Fatal("Failed to listen on port :2112", err)
-	// }
+	_, err := setupPrometheus(2112)
+	if err != nil {
+		log.Fatal("Failed to listen on port :2112", err)
+	}
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
