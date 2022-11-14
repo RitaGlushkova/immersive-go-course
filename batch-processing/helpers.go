@@ -45,7 +45,10 @@ type Converter struct {
 	cmd ConvertImageCommand
 }
 
-func genFilepath(suffix string) string {
+func genFilepath(out, suffix string) string {
+	if out != "" {
+		return fmt.Sprintf("%d-%d-%s.%s", time.Now().UnixMilli(), rand.Int(), out, suffix)
+	}
 	return fmt.Sprintf("%d-%d.%s", time.Now().UnixMilli(), rand.Int(), suffix)
 }
 
@@ -58,35 +61,52 @@ func (c *Converter) Grayscale(inputFilepath string, outputFilepath string) error
 	return err
 }
 
-func ReadCsvFile(filename, headerTitle string) ([][]string, error) {
-	// Open CSV file from there to read url links
+func ReadCsvFile(filename, headerTitle string) ([]string, error) {
+	// Open CSV file to read url links
 	fileContent, err := os.Open(filename)
 	if err != nil {
-		return [][]string{}, err
+		return []string{}, err
 	}
 	defer fileContent.Close()
 
 	//read from this file
 	records, err := csv.NewReader(fileContent).ReadAll()
 	if err != nil {
-		return [][]string{}, err
+		return []string{}, err
 	}
 
 	//check if there is any content
 	if len(records) == 0 {
-		return [][]string{}, fmt.Errorf("empty csv")
+		return []string{}, fmt.Errorf("empty csv")
 	}
-
-	//check if header and thus info is what we expect
 	header := records[0]
-	if header[0] != headerTitle || len(header) == 0 {
-		return [][]string{}, fmt.Errorf("incorrect header, expected %s, got %s", headerTitle, header[0])
+	// find index of needed header if none return error
+	//TODO processing headers
+
+	//check if header and title info is what we expect
+	// assuming we have multiple columns in the file, we need to find url
+	var urls []string
+	var counter int
+	for i, h := range header {
+		if h == headerTitle {
+			fmt.Println(records)
+			for n := 1; n < len(records); n++ {
+				urls = append(urls, records[n][i])
+				fmt.Println("read a record")
+			}
+		} else {
+			counter++
+		}
 	}
-	fmt.Println("read a record")
-	return records, nil
+	// no matching headers found
+	// CHANGE
+	if counter != len(header)-1 {
+		return []string{}, fmt.Errorf("header not found, expected %s, got %v", headerTitle, header)
+	}
+	return urls, nil
 }
 
-func DownloadImageS(urlsChan chan string, inputPathsChan chan ProcessDownloadImage, inputPath string, processingErrorChan chan RowError, wg *sync.WaitGroup) {
+func DownloadImages(urlsChan chan string, inputPathsChan chan ProcessDownloadImage, inputPath string, processingErrorChan chan RowError, wg *sync.WaitGroup) {
 	for url := range urlsChan {
 		d := DownloadImage(url, inputPath)
 		if d.err != nil {
@@ -128,7 +148,7 @@ func DownloadImage(url, inputPath string) ProcessDownloadImage {
 	defer r.Body.Close()
 
 	//create file where to download content of url
-	inputFilepath := filepath.Join("/tmp", genFilepath("jpg"))
+	inputFilepath := filepath.Join("/tmp", genFilepath("", "jpg"))
 
 	// need to change to temp directory
 	file, err := os.Create(inputFilepath)
@@ -150,7 +170,7 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	// Set up imagemagick
 	imagick.Initialize()
 	defer imagick.Terminate()
-	outputFilepath := filepath.Join("/tmp", fmt.Sprintf("%d-%d-out.jpg", time.Now().UnixMilli(), rand.Int()))
+	outputFilepath := filepath.Join("/tmp", genFilepath("out", "jpeg"))
 	// Log what we're going to do
 	log.Printf("processing: %q to %q\n", inputFilepath, outputFilepath)
 
@@ -167,4 +187,19 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	// Log what we did
 	log.Printf("processed: %q to %q\n", inputFilepath, outputFilepath)
 	return ProcessUploadImage{url: url, input: inputFilepath, output: outputFilepath, err: nil}
+}
+
+func CreateAndWriteToCSVFile(path string, records [][]string) error {
+	csvFile, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create a file %s, %v", path, err)
+	}
+	defer csvFile.Close()
+	w := csv.NewWriter(csvFile)
+	defer w.Flush()
+	err = w.WriteAll(records)
+	if err != nil {
+		return fmt.Errorf("failed to write records into file %s, %v", path, err)
+	}
+	return nil
 }

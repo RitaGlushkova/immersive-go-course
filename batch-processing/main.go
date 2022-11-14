@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -26,12 +25,12 @@ type AWSConfig struct {
 func main() {
 
 	// Accept --input and --output arguments for the images
-	inputFilePath := flag.String("input", "", "A path to an image to be processed")
-	outputFilePath := flag.String("output", "", "A path to where the processed image should be written")
-	outputPathFailed := flag.String("output-failed", "", "A path to where failed image should be written")
+	inputFilePath := flag.String("input", "", "A path to file with images to be processed")
+	outputFilePath := flag.String("output", "", "A path to output file")
+	outputPathFailed := flag.String("output-failed", "", "A path to file where filed outputs recorded")
 	flag.Parse()
 
-	// Ensure that both flags were set
+	// Ensure that all flags were set
 	if *inputFilePath == "" || *outputFilePath == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -74,33 +73,43 @@ func main() {
 
 	outputRecords := make([][]string, 0)
 	outputErrRecords := make([][]string, 0)
+
+	//append headers to slices, which we will use to write in our CSV files
 	outputRecords = append(outputRecords, []string{"url", "input", "output", "s3url"})
 	outputErrRecords = append(outputErrRecords, []string{"url", "err", "message"})
-	records = records[1:]
-	var wg sync.WaitGroup
-	urlsChan := make(chan string, 4)
-	processingErrorChan := make(chan RowError)
-	inputPathsChan := make(chan ProcessDownloadImage, 4)
-	outputPathsChan := make(chan Row, 4)
-	go DownloadImageS(urlsChan, inputPathsChan, *inputFilePath, processingErrorChan, &wg)
-	go ConvertImages(inputPathsChan, *outputFilePath, outputPathsChan, processingErrorChan, &wg)
 
+	//setting up WaitGroup to keep track of completion of our goroutines.
+	var wg sync.WaitGroup
+
+	// create channels
+	// we can control how we process images.
+	urlsChan := make(chan string, len(records))
+	processingErrorChan := make(chan RowError, len(records))
+	inputPathsChan := make(chan ProcessDownloadImage, len(records))
+	outputPathsChan := make(chan Row, len(records))
+
+	// set go routines
+	for i := 0; i < 4; i++ {
+		go DownloadImages(urlsChan, inputPathsChan, *inputFilePath, processingErrorChan, &wg)
+		go ConvertImages(inputPathsChan, *outputFilePath, outputPathsChan, processingErrorChan, &wg)
+	}
 	for _, record := range records {
 		wg.Add(1)
-		urlsChan <- record[0]
+		urlsChan <- record //url
+	}
+
+	for range records {
 		select {
 		case invalidRecord := <-processingErrorChan:
 			fmt.Println(invalidRecord.message)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.err.Error(), invalidRecord.message})
 		case row := <-outputPathsChan:
 			outputFile, err := os.Open(row.output)
+			defer outputFile.Close()
 			if err != nil {
 				fmt.Printf("can not open file %v, err: %v\n", row.output, err)
 				break
 			}
-
-			// Uploads the object to S3. The Context will interrupt the request if the
-			// timeout expires.
 			outputKey := filepath.Base(row.output)
 			_, err = svc.PutObject(&s3.PutObjectInput{
 				Bucket: aws.String(config.BucketName),
@@ -109,13 +118,13 @@ func main() {
 			})
 			if err != nil {
 				if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
-					// If the SDK can determine the request or retry delay was canceled
-					// by a context the CanceledErrorCode error code will be returned.
 					fmt.Fprintf(os.Stderr, "upload canceled due to timeout, %v\n", err)
+					outputErrRecords = append(outputErrRecords, []string{row.url, err.Error(), "upload canceled due to timeout"})
 				} else {
 					fmt.Fprintf(os.Stderr, "failed to upload object, %v\n", err)
+					outputErrRecords = append(outputErrRecords, []string{row.url, err.Error(), "failed to upload object to S3 bucket"})
 				}
-				os.Exit(1)
+				continue
 			}
 			s3url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", config.BucketName, config.Region, outputKey)
 			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url})
@@ -123,28 +132,17 @@ func main() {
 	}
 	wg.Wait()
 
-	err = CreateFile(*outputFilePath, outputRecords)
-	if err != nil {
-		log.Fatal(err)
+	errOutput := CreateAndWriteToCSVFile(*outputFilePath, outputRecords)
+	if errOutput != nil {
+		fmt.Fprintf(os.Stderr, "failed to creates and write to the output.csv file, path: %v, %v\n", *outputFilePath, err)
 	}
 
-	err = CreateFile(*outputPathFailed, outputErrRecords)
-	if err != nil {
-		log.Fatal(err)
+	errFailed := CreateAndWriteToCSVFile(*outputPathFailed, outputErrRecords)
+	if errFailed != nil {
+		fmt.Fprintf(os.Stderr, "failed to creates and write to the failed.csv file, path: %v, %v\n", *outputPathFailed, err)
 	}
-}
 
-func CreateFile(path string, records [][]string) error {
-	csvFile, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to create a file %s, %v", path, err)
+	if errOutput != nil || errFailed != nil || len(outputErrRecords) > 1 {
+		os.Exit(1)
 	}
-	defer csvFile.Close()
-	w := csv.NewWriter(csvFile)
-	defer w.Flush()
-	err = w.WriteAll(records)
-	if err != nil {
-		return fmt.Errorf("failed to write records into file %s, %v", path, err)
-	}
-	return nil
 }
