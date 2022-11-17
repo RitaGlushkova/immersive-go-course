@@ -4,7 +4,7 @@ import (
 	//"bytes"
 	"encoding/csv"
 	"fmt"
-	"image"
+	//"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
