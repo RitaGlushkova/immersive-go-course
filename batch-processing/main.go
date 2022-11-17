@@ -21,7 +21,6 @@ func main() {
 	outputFilePath := flag.String("output", "", "A path to output file")
 	outputPathFailed := flag.String("output-failed", "", "A path to file where filed outputs recorded")
 	flag.Parse()
-	p := Path{inputPath: *inputFilePath, outputPath: *outputFilePath}
 	// Ensure that all flags were set
 	if *inputFilePath == "" || *outputFilePath == "" || *outputPathFailed == "" {
 		flag.Usage()
@@ -53,7 +52,7 @@ func main() {
 	// set go routines
 	for i := 0; i < 4; i++ {
 		go DownloadImages(channels, &wg)
-		go p.ConvertImages(channels, &wg)
+		go ConvertImages(channels, &wg)
 	}
 	for _, url := range urls {
 		wg.Add(1)
@@ -63,6 +62,7 @@ func main() {
 	for range urls {
 		select {
 		case invalidRecord := <-channels.processingErrorChan:
+			fmt.Println(invalidRecord.suffix)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.input, invalidRecord.output, invalidRecord.err.Error()})
 		case row := <-channels.outputPathsChan:
 			outputFile, err := os.Open(row.output)

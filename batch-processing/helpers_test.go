@@ -2,10 +2,9 @@ package main
 
 import (
 	"errors"
+	"gopkg.in/gographics/imagick.v2/imagick"
 	"reflect"
 	"testing"
-
-	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
 func TestGrayscaleMockError(t *testing.T) {

@@ -1,10 +1,13 @@
 package main
 
 import (
-	"bytes"
+	//"bytes"
 	"encoding/csv"
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"log"
 	"math/rand"
@@ -14,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/slices"
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
@@ -22,6 +26,7 @@ type ProcessImage struct {
 	input  string
 	output string
 	err    error
+	suffix string
 }
 
 type Channels struct {
@@ -30,18 +35,12 @@ type Channels struct {
 	inputPathsChan      chan ProcessImage
 	outputPathsChan     chan ProcessImage
 }
-type Path struct {
-	inputPath  string
-	outputPath string
-}
 
 type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error)
 
 type Converter struct {
 	cmd ConvertImageCommand
 }
-
-var suffix string
 
 func genFilepath(out, suffix string) string {
 	if out != "" {
@@ -79,27 +78,18 @@ func ReadCsvFile(filename, headerTitle string) ([]string, error) {
 	}
 	header := records[0]
 	// find index of needed header if none return error
-	//TODO processing headers
 
 	//check if header and title info is what we expect
 	// assuming we have multiple columns in the file, we need to find url
 	var urls []string
-	var counter int
-	for i, h := range header {
-		if h == headerTitle {
-			fmt.Println(records)
-			for n := 1; n < len(records); n++ {
-				urls = append(urls, records[n][i])
-				fmt.Println("read a record")
-			}
-		} else {
-			counter++
+	if header[0] == headerTitle {
+		fmt.Println(records)
+		for n := 1; n < len(records); n++ {
+			urls = append(urls, records[n][0])
+			fmt.Println("read a record")
 		}
-	}
-	// no matching headers found
-	// CHANGE
-	if counter != len(header)-1 {
-		return []string{}, fmt.Errorf("header not found, expected %s, got %v", headerTitle, header)
+	} else {
+		return []string{}, fmt.Errorf("no matching header found, expected %s, got %v", headerTitle, header)
 	}
 	return urls, nil
 }
@@ -108,7 +98,7 @@ func DownloadImages(channels Channels, wg *sync.WaitGroup) {
 	for url := range channels.urlsChan {
 		d := DownloadImage(url)
 		if d.err != nil {
-			channels.processingErrorChan <- ProcessImage{url: d.url, input: d.output, output: d.output, err: d.err}
+			channels.processingErrorChan <- d
 			wg.Done()
 		} else {
 			channels.inputPathsChan <- d
@@ -116,21 +106,15 @@ func DownloadImages(channels Channels, wg *sync.WaitGroup) {
 	}
 }
 
-func (p *Path) ConvertImages(channels Channels, wg *sync.WaitGroup) {
+func ConvertImages(channels Channels, wg *sync.WaitGroup) {
 	for inputPath := range channels.inputPathsChan {
-		conv := ConvertImageIntoGreyScale(inputPath.input, p.outputPath, inputPath.url)
+		conv := ConvertImageIntoGreyScale(inputPath)
 		if conv.err != nil {
-			channels.processingErrorChan <- ProcessImage{url: conv.url, input: conv.input, output: conv.output, err: conv.err}
-			wg.Done()
+			channels.processingErrorChan <- conv
 		} else {
-			row := ProcessImage{
-				url:    conv.url,
-				input:  conv.input,
-				output: conv.output,
-			}
-			channels.outputPathsChan <- row
-			wg.Done()
+			channels.outputPathsChan <- conv
 		}
+		wg.Done()
 	}
 }
 func DownloadImage(url string) ProcessImage {
@@ -138,7 +122,7 @@ func DownloadImage(url string) ProcessImage {
 	defer func() {
 		fmt.Printf("downloaded file in %s\n", time.Since(start))
 	}()
-
+	var supportedFormats = []string{"jpeg", "png", "gif"}
 	//make GET request to URL
 	r, err := http.Get(url)
 	if err != nil || r.StatusCode != 200 {
@@ -146,18 +130,19 @@ func DownloadImage(url string) ProcessImage {
 	}
 	defer r.Body.Close()
 
-	var buf bytes.Buffer
-	tee := io.TeeReader(r.Body, &buf)
-	_, suffix, err := image.Decode(tee)
+	_, suffix, err := image.Decode(r.Body)
 	if err != nil {
 		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
+	}
+	if !slices.Contains(supportedFormats, suffix) {
+		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("format: %s is not supported. Error: %v", suffix, err)}
 	}
 	//create file where to download content of url
 	inputFilepath := filepath.Join("/tmp", genFilepath("", suffix))
 	// need to change to temp directory
 	file, err := os.Create(inputFilepath)
 	if err != nil {
-		return ProcessImage{url: url, input: inputFilepath, output: "no filepath", err: fmt.Errorf("file could not be created: %v", err)}
+		return ProcessImage{url: url, input: inputFilepath, output: "no filepath", err: fmt.Errorf("file could not be created: %v", err), suffix: suffix}
 	}
 	defer file.Close()
 
@@ -167,16 +152,16 @@ func DownloadImage(url string) ProcessImage {
 		return ProcessImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("data not copied into a file: %v", err)}
 	}
 
-	return ProcessImage{url: url, input: inputFilepath, output: "", err: nil}
+	return ProcessImage{url: url, input: inputFilepath, output: "", err: nil, suffix: suffix}
 }
 
-func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) ProcessImage {
+func ConvertImageIntoGreyScale(in ProcessImage) ProcessImage {
 	// Set up imagemagick
 	imagick.Initialize()
 	defer imagick.Terminate()
-	outputFilepath := filepath.Join("/tmp", genFilepath("out", suffix))
+	outputFilepath := filepath.Join("/tmp", genFilepath("out", in.suffix))
 	// Log what we're going to do
-	log.Printf("processing: %q to %q\n", inputFilepath, outputFilepath)
+	log.Printf("processing: %q to %q\n", in.input, outputFilepath)
 
 	// Build a Converter struct that will use imagick
 	c := &Converter{
@@ -184,13 +169,13 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	}
 
 	// Do the conversion! and save to output folder
-	err := c.Grayscale(inputFilepath, outputFilepath)
+	err := c.Grayscale(in.input, outputFilepath)
 	if err != nil {
-		return ProcessImage{url: url, input: inputFilepath, output: outputFilepath, err: fmt.Errorf("error: %v\n", err)}
+		return ProcessImage{url: in.url, input: in.input, output: outputFilepath, err: fmt.Errorf("error: %v\n", err), suffix: in.suffix}
 	}
 	// Log what we did
-	log.Printf("processed: %q to %q\n", inputFilepath, outputFilepath)
-	return ProcessImage{url: url, input: inputFilepath, output: outputFilepath, err: nil}
+	log.Printf("processed: %q to %q\n", in.input, outputFilepath)
+	return ProcessImage{url: in.url, input: in.input, output: outputFilepath, err: nil, suffix: in.suffix}
 }
 
 func CreateAndWriteToCSVFile(path string, records [][]string) error {
