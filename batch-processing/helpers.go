@@ -146,13 +146,12 @@ func DownloadImage(url string) ProcessImage {
 	}
 	defer r.Body.Close()
 
+	var buf bytes.Buffer
+	tee := io.TeeReader(r.Body, &buf)
+	_, suffix, err := image.Decode(tee)
 	if err != nil {
 		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
 	}
-	var buf bytes.Buffer
-	tee := io.TeeReader(r.Body, &buf)
-	_, suffix, _ = image.Decode(tee)
-
 	//create file where to download content of url
 	inputFilepath := filepath.Join("/tmp", genFilepath("", suffix))
 	// need to change to temp directory
