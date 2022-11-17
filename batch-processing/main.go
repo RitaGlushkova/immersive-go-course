@@ -5,13 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type AWSConfig struct {
@@ -29,12 +23,11 @@ func main() {
 	flag.Parse()
 	p := Path{inputPath: *inputFilePath, outputPath: *outputFilePath}
 	// Ensure that all flags were set
-	if *inputFilePath == "" || *outputFilePath == "" {
+	if *inputFilePath == "" || *outputFilePath == "" || *outputPathFailed == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	svc, config := s3Config()
-	records, err := ReadCsvFile(*inputFilePath, "url")
+	urls, err := ReadCsvFile(*inputFilePath, "url")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +37,7 @@ func main() {
 
 	//append headers to slices, which we will use to write in our CSV files
 	outputRecords = append(outputRecords, []string{"url", "input", "output", "s3url", "error"})
-	outputErrRecords = append(outputErrRecords, []string{"url", "input", "output", "s3url", "error"})
+	outputErrRecords = append(outputErrRecords, []string{"url", "input", "output", "error"})
 
 	//setting up WaitGroup to keep track of completion of our goroutines.
 	var wg sync.WaitGroup
@@ -52,51 +45,38 @@ func main() {
 	// create channels
 	// we can control how we process images.
 	channels := Channels{
-		urlsChan:            make(chan string, len(records)),
-		processingErrorChan: make(chan ProcessImage, len(records)),
-		inputPathsChan:      make(chan ProcessImage, len(records)),
-		outputPathsChan:     make(chan ProcessImage, len(records))}
+		urlsChan:            make(chan string, len(urls)),
+		processingErrorChan: make(chan ProcessImage, len(urls)),
+		inputPathsChan:      make(chan ProcessImage, len(urls)),
+		outputPathsChan:     make(chan ProcessImage, len(urls))}
 
 	// set go routines
 	for i := 0; i < 4; i++ {
 		go DownloadImages(channels, &wg)
 		go p.ConvertImages(channels, &wg)
 	}
-	for _, record := range records {
+	for _, url := range urls {
 		wg.Add(1)
-		channels.urlsChan <- record //url
+		channels.urlsChan <- url
 	}
 
-	for range records {
+	for range urls {
 		select {
 		case invalidRecord := <-channels.processingErrorChan:
-			fmt.Println(invalidRecord.err)
-			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.err.Error()})
+			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.input, invalidRecord.output, invalidRecord.err.Error()})
 		case row := <-channels.outputPathsChan:
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()
 			if err != nil {
 				fmt.Printf("can not open file %v, err: %v\n", row.output, err)
-				break
-			}
-			outputKey := filepath.Base(row.output)
-			_, err = svc.PutObject(&s3.PutObjectInput{
-				Bucket: aws.String(config.BucketName),
-				Key:    aws.String(outputKey),
-				Body:   outputFile,
-			})
-			if err != nil {
-				if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
-					fmt.Fprintf(os.Stderr, "upload canceled due to timeout, %v\n", err)
-					outputErrRecords = append(outputErrRecords, []string{row.url, err.Error(), "upload canceled due to timeout"})
-				} else {
-					fmt.Fprintf(os.Stderr, "failed to upload object, %v\n", err)
-					outputErrRecords = append(outputErrRecords, []string{row.url, err.Error(), "failed to upload object to S3 bucket"})
-				}
+				outputErrRecords = append(outputErrRecords, []string{row.url, row.input, row.output, err.Error()})
 				continue
 			}
-			s3url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", config.BucketName, config.Region, outputKey)
-			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url})
+			s3url, err := s3ConfigAndUpload(outputFile, row, outputErrRecords)
+			if err != nil {
+				continue
+			}
+			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url, "nil"})
 		}
 	}
 	wg.Wait()

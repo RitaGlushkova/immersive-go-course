@@ -1,16 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-func s3Config() (svc *s3.S3, config *AWSConfig) {
+func s3ConfigAndUpload(outputFile *os.File, row ProcessImage, outputErrRecords [][]string) (string, error) {
 	awsRoleArn := os.Getenv("AWS_ROLE_ARN")
 	if awsRoleArn == "" {
 		log.Fatalln("Please set AWS_ROLE_ARN environment variable")
@@ -24,7 +28,7 @@ func s3Config() (svc *s3.S3, config *AWSConfig) {
 		log.Fatalln("Please set S3_BUCKET environment variable")
 	}
 
-	config = &AWSConfig{
+	config := &AWSConfig{
 		ArnRole:    awsRoleArn,
 		Region:     awsRegion,
 		BucketName: s3Bucket,
@@ -41,7 +45,22 @@ func s3Config() (svc *s3.S3, config *AWSConfig) {
 
 	// Create service client value configured for credentials
 	// from assumed role.
-	svc = s3.New(sess, &aws.Config{Credentials: creds})
-
-	return svc, config
+	svc := s3.New(sess, &aws.Config{Credentials: creds})
+	outputKey := filepath.Base(row.output)
+	_, err := svc.PutObject(&s3.PutObjectInput{
+		Bucket: aws.String(config.BucketName),
+		Key:    aws.String(outputKey),
+		Body:   outputFile,
+	})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
+			fmt.Fprintf(os.Stderr, "upload canceled due to timeout, %v\n", err)
+			outputErrRecords = append(outputErrRecords, []string{row.url, row.input, row.output, err.Error()})
+			fmt.Fprintf(os.Stderr, "failed to upload object, %v\n", err)
+			outputErrRecords = append(outputErrRecords, []string{row.url, row.input, row.output, err.Error()})
+		}
+		return "", err
+	}
+	s3url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", config.BucketName, config.Region, outputKey)
+	return s3url, nil
 }

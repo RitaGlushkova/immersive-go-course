@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"math/rand"
@@ -38,6 +40,8 @@ type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error
 type Converter struct {
 	cmd ConvertImageCommand
 }
+
+var suffix string
 
 func genFilepath(out, suffix string) string {
 	if out != "" {
@@ -104,7 +108,7 @@ func DownloadImages(channels Channels, wg *sync.WaitGroup) {
 	for url := range channels.urlsChan {
 		d := DownloadImage(url)
 		if d.err != nil {
-			channels.processingErrorChan <- ProcessImage{url: d.url, err: d.err}
+			channels.processingErrorChan <- ProcessImage{url: d.url, input: d.output, output: d.output, err: d.err}
 			wg.Done()
 		} else {
 			channels.inputPathsChan <- d
@@ -116,7 +120,7 @@ func (p *Path) ConvertImages(channels Channels, wg *sync.WaitGroup) {
 	for inputPath := range channels.inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath.input, p.outputPath, inputPath.url)
 		if conv.err != nil {
-			channels.processingErrorChan <- ProcessImage{url: conv.url, err: conv.err}
+			channels.processingErrorChan <- ProcessImage{url: conv.url, input: conv.input, output: conv.output, err: conv.err}
 			wg.Done()
 		} else {
 			row := ProcessImage{
@@ -134,37 +138,44 @@ func DownloadImage(url string) ProcessImage {
 	defer func() {
 		fmt.Printf("downloaded file in %s\n", time.Since(start))
 	}()
+
 	//make GET request to URL
 	r, err := http.Get(url)
-	if err != nil {
-		return ProcessImage{url: url, input: "", err: fmt.Errorf("couldn't process get request from %s. Error: %v", url, err)}
+	if err != nil || r.StatusCode != 200 {
+		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't fetch image. Error: %v", err)}
 	}
 	defer r.Body.Close()
 
-	//create file where to download content of url
-	inputFilepath := filepath.Join("/tmp", genFilepath("", "jpg"))
+	if err != nil {
+		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
+	}
+	var buf bytes.Buffer
+	tee := io.TeeReader(r.Body, &buf)
+	_, suffix, _ = image.Decode(tee)
 
+	//create file where to download content of url
+	inputFilepath := filepath.Join("/tmp", genFilepath("", suffix))
 	// need to change to temp directory
 	file, err := os.Create(inputFilepath)
 	if err != nil {
-		return ProcessImage{url: url, input: "", err: fmt.Errorf("file could not be created: %v", err)}
+		return ProcessImage{url: url, input: inputFilepath, output: "no filepath", err: fmt.Errorf("file could not be created: %v", err)}
 	}
 	defer file.Close()
 
 	//copy content from URl to the file
 	_, err = io.Copy(file, r.Body)
 	if err != nil {
-		return ProcessImage{url: url, input: "", err: fmt.Errorf("data not copied into a file: %v", err)}
+		return ProcessImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("data not copied into a file: %v", err)}
 	}
 
-	return ProcessImage{url: url, input: inputFilepath, err: nil}
+	return ProcessImage{url: url, input: inputFilepath, output: "", err: nil}
 }
 
 func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) ProcessImage {
 	// Set up imagemagick
 	imagick.Initialize()
 	defer imagick.Terminate()
-	outputFilepath := filepath.Join("/tmp", genFilepath("out", "jpeg"))
+	outputFilepath := filepath.Join("/tmp", genFilepath("out", suffix))
 	// Log what we're going to do
 	log.Printf("processing: %q to %q\n", inputFilepath, outputFilepath)
 
@@ -176,7 +187,7 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	// Do the conversion! and save to output folder
 	err := c.Grayscale(inputFilepath, outputFilepath)
 	if err != nil {
-		return ProcessImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("error: %v\n", err)}
+		return ProcessImage{url: url, input: inputFilepath, output: outputFilepath, err: fmt.Errorf("error: %v\n", err)}
 	}
 	// Log what we did
 	log.Printf("processed: %q to %q\n", inputFilepath, outputFilepath)
