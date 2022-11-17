@@ -76,7 +76,7 @@ func main() {
 
 	//append headers to slices, which we will use to write in our CSV files
 	outputRecords = append(outputRecords, []string{"url", "input", "output", "s3url"})
-	outputErrRecords = append(outputErrRecords, []string{"url", "err", "message"})
+	outputErrRecords = append(outputErrRecords, []string{"url", "err"})
 
 	//setting up WaitGroup to keep track of completion of our goroutines.
 	var wg sync.WaitGroup
@@ -101,8 +101,8 @@ func main() {
 	for range records {
 		select {
 		case invalidRecord := <-processingErrorChan:
-			fmt.Println(invalidRecord.message)
-			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.err.Error(), invalidRecord.message})
+			fmt.Println(invalidRecord.err)
+			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.err.Error()})
 		case row := <-outputPathsChan:
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()

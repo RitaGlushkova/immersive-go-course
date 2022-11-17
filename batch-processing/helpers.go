@@ -34,9 +34,8 @@ type ProcessUploadImage struct {
 }
 
 type RowError struct {
-	url     string
-	err     error
-	message string
+	url string
+	err error
 }
 
 type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error)
@@ -110,7 +109,7 @@ func DownloadImages(urlsChan chan string, inputPathsChan chan ProcessDownloadIma
 	for url := range urlsChan {
 		d := DownloadImage(url, inputPath)
 		if d.err != nil {
-			processingErrorChan <- RowError{d.url, d.err, "couldn't download an image"}
+			processingErrorChan <- RowError{d.url, d.err}
 			wg.Done()
 		} else {
 			inputPathsChan <- d
@@ -122,7 +121,7 @@ func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, 
 	for inputPath := range inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath.input, outputPath, inputPath.url)
 		if conv.err != nil {
-			processingErrorChan <- RowError{conv.url, conv.err, "couldn't convert an image"}
+			processingErrorChan <- RowError{url: conv.url, err: conv.err}
 			wg.Done()
 		} else {
 			row := Row{
