@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
 type AWSConfig struct {
@@ -26,6 +28,8 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	imagick.Initialize()
+	defer imagick.Terminate()
 	urls, err := ReadCsvFile(*inputFilePath, "url")
 	if err != nil {
 		log.Fatal(err)

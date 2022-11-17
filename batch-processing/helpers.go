@@ -62,14 +62,14 @@ func ReadCsvFile(filename, headerTitle string) ([]string, error) {
 	// Open CSV file to read url links
 	fileContent, err := os.Open(filename)
 	if err != nil {
-		return []string{}, err
+		return []string{}, fmt.Errorf("couldn't open input file, %v", err)
 	}
 	defer fileContent.Close()
 
 	//read from this file
 	records, err := csv.NewReader(fileContent).ReadAll()
 	if err != nil {
-		return []string{}, err
+		return []string{}, fmt.Errorf("couldn't read input file, %v", err)
 	}
 
 	//check if there is any content
@@ -130,38 +130,36 @@ func DownloadImage(url string) ProcessImage {
 	}
 	defer r.Body.Close()
 
-	_, suffix, err := image.Decode(r.Body)
-	if err != nil {
-		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
-	}
+	// _, suffix, err := image.DecodeConfig(r.Body)
+	// if err != nil {
+	// 	return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
+	// }
+	suffix := "jpeg"
 	if !slices.Contains(supportedFormats, suffix) {
 		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("format: %s is not supported. Error: %v", suffix, err)}
 	}
 	//create file where to download content of url
-	inputFilepath := filepath.Join("/tmp", genFilepath("", suffix))
+	inputImagePath := filepath.Join("/tmp", genFilepath("", suffix))
 	// need to change to temp directory
-	file, err := os.Create(inputFilepath)
+	file, err := os.Create(inputImagePath)
 	if err != nil {
-		return ProcessImage{url: url, input: inputFilepath, output: "no filepath", err: fmt.Errorf("file could not be created: %v", err), suffix: suffix}
+		return ProcessImage{url: url, input: inputImagePath, output: "no filepath", err: fmt.Errorf("file could not be created: %v", err), suffix: suffix}
 	}
 	defer file.Close()
 
 	//copy content from URl to the file
 	_, err = io.Copy(file, r.Body)
 	if err != nil {
-		return ProcessImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("data not copied into a file: %v", err)}
+		return ProcessImage{url: url, input: inputImagePath, output: "", err: fmt.Errorf("data not copied into a file: %v", err)}
 	}
 
-	return ProcessImage{url: url, input: inputFilepath, output: "", err: nil, suffix: suffix}
+	return ProcessImage{url: url, input: inputImagePath, output: "", err: nil, suffix: suffix}
 }
 
 func ConvertImageIntoGreyScale(in ProcessImage) ProcessImage {
-	// Set up imagemagick
-	imagick.Initialize()
-	defer imagick.Terminate()
-	outputFilepath := filepath.Join("/tmp", genFilepath("out", in.suffix))
+	outputImagePath := filepath.Join("/tmp", genFilepath("out", in.suffix))
 	// Log what we're going to do
-	log.Printf("processing: %q to %q\n", in.input, outputFilepath)
+	log.Printf("processing: %q to %q\n", in.input, outputImagePath)
 
 	// Build a Converter struct that will use imagick
 	c := &Converter{
@@ -169,13 +167,13 @@ func ConvertImageIntoGreyScale(in ProcessImage) ProcessImage {
 	}
 
 	// Do the conversion! and save to output folder
-	err := c.Grayscale(in.input, outputFilepath)
+	err := c.Grayscale(in.input, outputImagePath)
 	if err != nil {
-		return ProcessImage{url: in.url, input: in.input, output: outputFilepath, err: fmt.Errorf("error: %v\n", err), suffix: in.suffix}
+		return ProcessImage{url: in.url, input: in.input, output: outputImagePath, err: fmt.Errorf("Couldn't turn into grey scale: %v\n", err), suffix: in.suffix}
 	}
 	// Log what we did
-	log.Printf("processed: %q to %q\n", in.input, outputFilepath)
-	return ProcessImage{url: in.url, input: in.input, output: outputFilepath, err: nil, suffix: in.suffix}
+	log.Printf("processed: %q to %q\n", in.input, outputImagePath)
+	return ProcessImage{url: in.url, input: in.input, output: outputImagePath, err: nil, suffix: in.suffix}
 }
 
 func CreateAndWriteToCSVFile(path string, records [][]string) error {
