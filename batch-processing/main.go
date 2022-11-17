@@ -29,7 +29,7 @@ func main() {
 	outputFilePath := flag.String("output", "", "A path to output file")
 	outputPathFailed := flag.String("output-failed", "", "A path to file where filed outputs recorded")
 	flag.Parse()
-
+	p := Path{inputPath: *inputFilePath, outputPath: *outputFilePath}
 	// Ensure that all flags were set
 	if *inputFilePath == "" || *outputFilePath == "" {
 		flag.Usage()
@@ -83,27 +83,28 @@ func main() {
 
 	// create channels
 	// we can control how we process images.
-	urlsChan := make(chan string, len(records))
-	processingErrorChan := make(chan RowError, len(records))
-	inputPathsChan := make(chan ProcessDownloadImage, len(records))
-	outputPathsChan := make(chan Row, len(records))
+	channels := Channels{
+		urlsChan:            make(chan string, len(records)),
+		processingErrorChan: make(chan ProcessImage, len(records)),
+		inputPathsChan:      make(chan ProcessImage, len(records)),
+		outputPathsChan:     make(chan ProcessImage, len(records))}
 
 	// set go routines
 	for i := 0; i < 4; i++ {
-		go DownloadImages(urlsChan, inputPathsChan, *inputFilePath, processingErrorChan, &wg)
-		go ConvertImages(inputPathsChan, *outputFilePath, outputPathsChan, processingErrorChan, &wg)
+		go DownloadImages(channels, &wg)
+		go p.ConvertImages(channels, &wg)
 	}
 	for _, record := range records {
 		wg.Add(1)
-		urlsChan <- record //url
+		channels.urlsChan <- record //url
 	}
 
 	for range records {
 		select {
-		case invalidRecord := <-processingErrorChan:
+		case invalidRecord := <-channels.processingErrorChan:
 			fmt.Println(invalidRecord.err)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.err.Error()})
-		case row := <-outputPathsChan:
+		case row := <-channels.outputPathsChan:
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()
 			if err != nil {

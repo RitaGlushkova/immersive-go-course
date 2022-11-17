@@ -15,27 +15,22 @@ import (
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
-type Row struct {
-	url    string
-	input  string
-	output string
-}
-
-type ProcessDownloadImage struct {
-	url   string
-	input string
-	err   error
-}
-type ProcessUploadImage struct {
+type ProcessImage struct {
 	url    string
 	input  string
 	output string
 	err    error
 }
 
-type RowError struct {
-	url string
-	err error
+type Channels struct {
+	urlsChan            chan string
+	processingErrorChan chan ProcessImage
+	inputPathsChan      chan ProcessImage
+	outputPathsChan     chan ProcessImage
+}
+type Path struct {
+	inputPath  string
+	outputPath string
 }
 
 type ConvertImageCommand func(args []string) (*imagick.ImageCommandResult, error)
@@ -105,36 +100,36 @@ func ReadCsvFile(filename, headerTitle string) ([]string, error) {
 	return urls, nil
 }
 
-func DownloadImages(urlsChan chan string, inputPathsChan chan ProcessDownloadImage, inputPath string, processingErrorChan chan RowError, wg *sync.WaitGroup) {
-	for url := range urlsChan {
-		d := DownloadImage(url, inputPath)
+func DownloadImages(channels Channels, wg *sync.WaitGroup) {
+	for url := range channels.urlsChan {
+		d := DownloadImage(url)
 		if d.err != nil {
-			processingErrorChan <- RowError{d.url, d.err}
+			channels.processingErrorChan <- ProcessImage{url: d.url, err: d.err}
 			wg.Done()
 		} else {
-			inputPathsChan <- d
+			channels.inputPathsChan <- d
 		}
 	}
 }
 
-func ConvertImages(inputPathsChan chan ProcessDownloadImage, outputPath string, outputPathsChan chan Row, processingErrorChan chan RowError, wg *sync.WaitGroup) {
-	for inputPath := range inputPathsChan {
-		conv := ConvertImageIntoGreyScale(inputPath.input, outputPath, inputPath.url)
+func (p *Path) ConvertImages(channels Channels, wg *sync.WaitGroup) {
+	for inputPath := range channels.inputPathsChan {
+		conv := ConvertImageIntoGreyScale(inputPath.input, p.outputPath, inputPath.url)
 		if conv.err != nil {
-			processingErrorChan <- RowError{url: conv.url, err: conv.err}
+			channels.processingErrorChan <- ProcessImage{url: conv.url, err: conv.err}
 			wg.Done()
 		} else {
-			row := Row{
+			row := ProcessImage{
 				url:    conv.url,
 				input:  conv.input,
 				output: conv.output,
 			}
-			outputPathsChan <- row
+			channels.outputPathsChan <- row
 			wg.Done()
 		}
 	}
 }
-func DownloadImage(url, inputPath string) ProcessDownloadImage {
+func DownloadImage(url string) ProcessImage {
 	start := time.Now()
 	defer func() {
 		fmt.Printf("downloaded file in %s\n", time.Since(start))
@@ -142,7 +137,7 @@ func DownloadImage(url, inputPath string) ProcessDownloadImage {
 	//make GET request to URL
 	r, err := http.Get(url)
 	if err != nil {
-		return ProcessDownloadImage{url: url, input: "", err: fmt.Errorf("couldn't process get request from %s. Error: %v", url, err)}
+		return ProcessImage{url: url, input: "", err: fmt.Errorf("couldn't process get request from %s. Error: %v", url, err)}
 	}
 	defer r.Body.Close()
 
@@ -152,20 +147,20 @@ func DownloadImage(url, inputPath string) ProcessDownloadImage {
 	// need to change to temp directory
 	file, err := os.Create(inputFilepath)
 	if err != nil {
-		return ProcessDownloadImage{url: url, input: "", err: fmt.Errorf("file could not be created: %v", err)}
+		return ProcessImage{url: url, input: "", err: fmt.Errorf("file could not be created: %v", err)}
 	}
 	defer file.Close()
 
 	//copy content from URl to the file
 	_, err = io.Copy(file, r.Body)
 	if err != nil {
-		return ProcessDownloadImage{url: url, input: "", err: fmt.Errorf("data not copied into a file: %v", err)}
+		return ProcessImage{url: url, input: "", err: fmt.Errorf("data not copied into a file: %v", err)}
 	}
 
-	return ProcessDownloadImage{url: url, input: inputFilepath, err: nil}
+	return ProcessImage{url: url, input: inputFilepath, err: nil}
 }
 
-func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) ProcessUploadImage {
+func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) ProcessImage {
 	// Set up imagemagick
 	imagick.Initialize()
 	defer imagick.Terminate()
@@ -181,11 +176,11 @@ func ConvertImageIntoGreyScale(inputFilepath, outputPath string, url string) Pro
 	// Do the conversion! and save to output folder
 	err := c.Grayscale(inputFilepath, outputFilepath)
 	if err != nil {
-		return ProcessUploadImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("error: %v\n", err)}
+		return ProcessImage{url: url, input: inputFilepath, output: "", err: fmt.Errorf("error: %v\n", err)}
 	}
 	// Log what we did
 	log.Printf("processed: %q to %q\n", inputFilepath, outputFilepath)
-	return ProcessUploadImage{url: url, input: inputFilepath, output: outputFilepath, err: nil}
+	return ProcessImage{url: url, input: inputFilepath, output: outputFilepath, err: nil}
 }
 
 func CreateAndWriteToCSVFile(path string, records [][]string) error {
