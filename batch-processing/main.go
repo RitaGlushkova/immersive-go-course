@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/ssgreg/bottleneck"
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
@@ -15,6 +16,8 @@ type AWSConfig struct {
 	Region     string
 	BucketName string
 }
+
+var bc *bottleneck.Calculator
 
 func main() {
 
@@ -28,6 +31,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	bc = bottleneck.NewCalculator()
 	imagick.Initialize()
 	defer imagick.Terminate()
 	urls, err := ReadCsvFile(*inputFilePath, "url")
@@ -58,6 +62,7 @@ func main() {
 		go DownloadImages(channels, &wg)
 		go ConvertImages(channels, &wg)
 	}
+
 	for _, url := range urls {
 		wg.Add(1)
 		channels.urlsChan <- url
@@ -69,6 +74,7 @@ func main() {
 			fmt.Println(invalidRecord.suffix)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.input, invalidRecord.output, invalidRecord.err.Error()})
 		case row := <-channels.outputPathsChan:
+			bc.TimeSlice(bottleneck.Index3)
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()
 			if err != nil {
@@ -83,8 +89,9 @@ func main() {
 			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url, "nil"})
 		}
 	}
+	entries := bc.Stats()
 	wg.Wait()
-
+	fmt.Printf("Read file is %v, downloading image %v, converting %v\n, saving %v\n", entries[0].Duration, entries[1].Duration, entries[2].Duration, entries[3].Duration)
 	errOutput := CreateAndWriteToCSVFile(*outputFilePath, outputRecords)
 	if errOutput != nil {
 		fmt.Fprintf(os.Stderr, "failed to creates and write to the output.csv file, path: %v, %v\n", *outputFilePath, err)

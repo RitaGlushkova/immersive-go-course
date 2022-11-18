@@ -1,10 +1,11 @@
 package main
 
 import (
-	//"bytes"
+	"bytes"
 	"encoding/csv"
 	"fmt"
-	//"image"
+
+	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -17,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ssgreg/bottleneck"
 	"golang.org/x/exp/slices"
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
@@ -59,6 +61,7 @@ func (c *Converter) Grayscale(inputFilepath string, outputFilepath string) error
 }
 
 func ReadCsvFile(filename, headerTitle string) ([]string, error) {
+	bc.TimeSlice(bottleneck.Index0)
 	// Open CSV file to read url links
 	fileContent, err := os.Open(filename)
 	if err != nil {
@@ -95,6 +98,7 @@ func ReadCsvFile(filename, headerTitle string) ([]string, error) {
 }
 
 func DownloadImages(channels Channels, wg *sync.WaitGroup) {
+	bc.TimeSlice(bottleneck.Index1)
 	for url := range channels.urlsChan {
 		d := DownloadImage(url)
 		if d.err != nil {
@@ -107,6 +111,7 @@ func DownloadImages(channels Channels, wg *sync.WaitGroup) {
 }
 
 func ConvertImages(channels Channels, wg *sync.WaitGroup) {
+	bc.TimeSlice(bottleneck.Index2)
 	for inputPath := range channels.inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath)
 		if conv.err != nil {
@@ -130,11 +135,16 @@ func DownloadImage(url string) ProcessImage {
 	}
 	defer r.Body.Close()
 
-	// _, suffix, err := image.DecodeConfig(r.Body)
-	// if err != nil {
-	// 	return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
-	// }
-	suffix := "jpeg"
+	var buf bytes.Buffer
+
+	tee := io.TeeReader(r.Body, &buf)
+	_, suffix, err := image.DecodeConfig(tee)
+
+	if err != nil {
+		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("couldn't decode image. Error: %v", err)}
+	}
+	//suffix := "jpeg"
+
 	if !slices.Contains(supportedFormats, suffix) {
 		return ProcessImage{url: url, input: "no filepath", output: "no filepath", err: fmt.Errorf("format: %s is not supported. Error: %v", suffix, err)}
 	}
@@ -148,7 +158,7 @@ func DownloadImage(url string) ProcessImage {
 	defer file.Close()
 
 	//copy content from URl to the file
-	_, err = io.Copy(file, r.Body)
+	_, err = io.Copy(file, &buf)
 	if err != nil {
 		return ProcessImage{url: url, input: inputImagePath, output: "", err: fmt.Errorf("data not copied into a file: %v", err)}
 	}
