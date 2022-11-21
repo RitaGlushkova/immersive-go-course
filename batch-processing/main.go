@@ -6,6 +6,9 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"github.com/ssgreg/bottleneck"
+	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
 type AWSConfig struct {
@@ -14,6 +17,8 @@ type AWSConfig struct {
 	BucketName string
 }
 
+var bc *bottleneck.Calculator
+
 func main() {
 
 	// Accept --input and --output arguments for the images
@@ -21,16 +26,21 @@ func main() {
 	outputFilePath := flag.String("output", "", "A path to output file")
 	outputPathFailed := flag.String("output-failed", "", "A path to file where filed outputs recorded")
 	flag.Parse()
-	p := Path{inputPath: *inputFilePath, outputPath: *outputFilePath}
 	// Ensure that all flags were set
 	if *inputFilePath == "" || *outputFilePath == "" || *outputPathFailed == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
+	bc = bottleneck.NewCalculator()
+	imagick.Initialize()
+	defer imagick.Terminate()
+
 	urls, err := ReadCsvFile(*inputFilePath, "url")
 	if err != nil {
 		log.Fatal(err)
 	}
+	// set up s3 bucket
+	svc, config := s3Config()
 
 	outputRecords := make([][]string, 0)
 	outputErrRecords := make([][]string, 0)
@@ -53,8 +63,9 @@ func main() {
 	// set go routines
 	for i := 0; i < 4; i++ {
 		go DownloadImages(channels, &wg)
-		go p.ConvertImages(channels, &wg)
+		go ConvertImages(channels, &wg)
 	}
+
 	for _, url := range urls {
 		wg.Add(1)
 		channels.urlsChan <- url
@@ -63,8 +74,10 @@ func main() {
 	for range urls {
 		select {
 		case invalidRecord := <-channels.processingErrorChan:
+			fmt.Println(invalidRecord.suffix)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.input, invalidRecord.output, invalidRecord.err.Error()})
 		case row := <-channels.outputPathsChan:
+			bc.TimeSlice(bottleneck.Index3)
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()
 			if err != nil {
@@ -72,15 +85,16 @@ func main() {
 				outputErrRecords = append(outputErrRecords, []string{row.url, row.input, row.output, err.Error()})
 				continue
 			}
-			s3url, err := s3ConfigAndUpload(outputFile, row, outputErrRecords)
+			s3url, err := saveToS3(svc, config, outputFile, row, outputErrRecords)
 			if err != nil {
 				continue
 			}
 			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url, "nil"})
 		}
 	}
+	entries := bc.Stats()
 	wg.Wait()
-
+	fmt.Printf("Read file is %v, downloading image %v, converting %v\n, saving %v\n", entries[0].Duration, entries[1].Duration, entries[2].Duration, entries[3].Duration)
 	errOutput := CreateAndWriteToCSVFile(*outputFilePath, outputRecords)
 	if errOutput != nil {
 		fmt.Fprintf(os.Stderr, "failed to creates and write to the output.csv file, path: %v, %v\n", *outputFilePath, err)
