@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-func s3ConfigAndUpload(outputFile *os.File, row ProcessImage, outputErrRecords [][]string) (string, error) {
+func s3Config() (*s3.S3, *AWSConfig) {
 	awsRoleArn := os.Getenv("AWS_ROLE_ARN")
 	if awsRoleArn == "" {
 		log.Fatalln("Please set AWS_ROLE_ARN environment variable")
@@ -46,6 +46,10 @@ func s3ConfigAndUpload(outputFile *os.File, row ProcessImage, outputErrRecords [
 	// Create service client value configured for credentials
 	// from assumed role.
 	svc := s3.New(sess, &aws.Config{Credentials: creds})
+	return svc, config
+}
+
+func saveToS3(svc *s3.S3, config *AWSConfig, outputFile *os.File, row ProcessImage, outputErrRecords [][]string) (string, error) {
 	outputKey := filepath.Base(row.output)
 	_, err := svc.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(config.BucketName),

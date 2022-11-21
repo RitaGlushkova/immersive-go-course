@@ -34,10 +34,13 @@ func main() {
 	bc = bottleneck.NewCalculator()
 	imagick.Initialize()
 	defer imagick.Terminate()
+
 	urls, err := ReadCsvFile(*inputFilePath, "url")
 	if err != nil {
 		log.Fatal(err)
 	}
+	// set up s3 bucket
+	svc, config := s3Config()
 
 	outputRecords := make([][]string, 0)
 	outputErrRecords := make([][]string, 0)
@@ -82,7 +85,7 @@ func main() {
 				outputErrRecords = append(outputErrRecords, []string{row.url, row.input, row.output, err.Error()})
 				continue
 			}
-			s3url, err := s3ConfigAndUpload(outputFile, row, outputErrRecords)
+			s3url, err := saveToS3(svc, config, outputFile, row, outputErrRecords)
 			if err != nil {
 				continue
 			}
