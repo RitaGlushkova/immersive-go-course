@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"sync"
 
@@ -20,7 +22,9 @@ type AWSConfig struct {
 var bc *bottleneck.Calculator
 
 func main() {
-
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	}()
 	// Accept --input and --output arguments for the images
 	inputFilePath := flag.String("input", "", "A path to file with images to be processed")
 	outputFilePath := flag.String("output", "", "A path to output file")

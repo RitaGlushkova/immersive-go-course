@@ -21,6 +21,7 @@ test: outputs
 develop: outputs
 	docker build --target develop -t develop .
 	docker run -it \
+		-p 6060:6060 \
 		--env-file docker_env \
 		--mount type=bind,source="$$(pwd)",target=/app \
 		--mount type=bind,source="/tmp",target=/tmp \
