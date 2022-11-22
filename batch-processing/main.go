@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ssgreg/bottleneck"
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
@@ -19,8 +18,6 @@ type AWSConfig struct {
 	BucketName string
 }
 
-var bc *bottleneck.Calculator
-
 func main() {
 	go func() {
 		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
@@ -29,13 +26,14 @@ func main() {
 	inputFilePath := flag.String("input", "", "A path to file with images to be processed")
 	outputFilePath := flag.String("output", "", "A path to output file")
 	outputPathFailed := flag.String("output-failed", "", "A path to file where filed outputs recorded")
+	//var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	// Ensure that all flags were set
 	if *inputFilePath == "" || *outputFilePath == "" || *outputPathFailed == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	bc = bottleneck.NewCalculator()
+
 	imagick.Initialize()
 	defer imagick.Terminate()
 
@@ -65,8 +63,10 @@ func main() {
 		outputPathsChan:     make(chan ProcessImage, len(urls))}
 
 	// set go routines
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 10; i++ {
 		go DownloadImages(channels, &wg)
+	}
+	for i := 0; i < 8; i++ {
 		go ConvertImages(channels, &wg)
 	}
 
@@ -81,7 +81,6 @@ func main() {
 			fmt.Println(invalidRecord.suffix)
 			outputErrRecords = append(outputErrRecords, []string{invalidRecord.url, invalidRecord.input, invalidRecord.output, invalidRecord.err.Error()})
 		case row := <-channels.outputPathsChan:
-			bc.TimeSlice(bottleneck.Index3)
 			outputFile, err := os.Open(row.output)
 			defer outputFile.Close()
 			if err != nil {
@@ -96,9 +95,7 @@ func main() {
 			outputRecords = append(outputRecords, []string{row.url, row.input, row.output, s3url, "nil"})
 		}
 	}
-	entries := bc.Stats()
 	wg.Wait()
-	fmt.Printf("Read file is %v, downloading image %v, converting %v\n, saving %v\n", entries[0].Duration, entries[1].Duration, entries[2].Duration, entries[3].Duration)
 	errOutput := CreateAndWriteToCSVFile(*outputFilePath, outputRecords)
 	if errOutput != nil {
 		fmt.Fprintf(os.Stderr, "failed to creates and write to the output.csv file, path: %v, %v\n", *outputFilePath, err)

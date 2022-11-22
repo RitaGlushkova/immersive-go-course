@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ssgreg/bottleneck"
 	"golang.org/x/exp/slices"
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
@@ -61,7 +60,6 @@ func (c *Converter) Grayscale(inputFilepath string, outputFilepath string) error
 }
 
 func ReadCsvFile(filename, headerTitle string) ([]string, error) {
-	bc.TimeSlice(bottleneck.Index0)
 	// Open CSV file to read url links
 	fileContent, err := os.Open(filename)
 	if err != nil {
@@ -98,7 +96,6 @@ func ReadCsvFile(filename, headerTitle string) ([]string, error) {
 }
 
 func DownloadImages(channels Channels, wg *sync.WaitGroup) {
-	bc.TimeSlice(bottleneck.Index1)
 	for url := range channels.urlsChan {
 		d := DownloadImage(url)
 		if d.err != nil {
@@ -111,7 +108,6 @@ func DownloadImages(channels Channels, wg *sync.WaitGroup) {
 }
 
 func ConvertImages(channels Channels, wg *sync.WaitGroup) {
-	bc.TimeSlice(bottleneck.Index2)
 	for inputPath := range channels.inputPathsChan {
 		conv := ConvertImageIntoGreyScale(inputPath)
 		if conv.err != nil {
