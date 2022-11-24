@@ -1,7 +1,5 @@
 resource "aws_iam_role" "GitHubActionECRPublicPushImage" {
-
   name = "GitHubActionECRPublicPushImage"
-
   assume_role_policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
@@ -24,12 +22,12 @@ resource "aws_iam_role" "GitHubActionECRPublicPushImage" {
 })
 }
 
-resource "aws_iam_policy_attachment" "GitHubActionECRPublicPushImage" {
+resource "aws_iam_policy_attachment" "GetAuthorizationToken" {
   roles      = aws_iam_role.GitHubActionECRPublicPushImage.name
   policy_arn = aws_iam_policy.GetAuthorizationToken.arn
 }
 
-resource "aws_iam_group_policy_attachment" "AllowPush" {
-  group      = aws_iam_group.AllowPush.name
+resource "aws_iam_policy_attachment" "AllowPush" {
+  roles      = aws_iam_role.GitHubActionECRPublicPushImage.name
   policy_arn = aws_iam_policy.AllowPush.arn
 }
