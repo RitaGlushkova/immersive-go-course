@@ -29,6 +29,7 @@ resource "aws_iam_policy_attachment" "GitHubActionECRPublicPushImage" {
   policy_arn = aws_iam_policy.GetAuthorizationToken.arn
 }
 
-resource "aws_iam_group_policy_attachment" "name" {
-  
+resource "aws_iam_group_policy_attachment" "AllowPush" {
+  group      = aws_iam_group.AllowPush.name
+  policy_arn = aws_iam_policy.AllowPush.arn
 }

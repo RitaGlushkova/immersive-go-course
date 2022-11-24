@@ -1,5 +1,5 @@
 resource "aws_iam_policy" "GetAuthorizationToken" {
-    name        = "GetAuthorizationToken-${var.username}"
+    name        = "GetAuthorizationToken"
     path       = "/"
     description = "Allows the user to get an authorization token for the ECR registry" 
     policy = jsonencode({
@@ -19,7 +19,7 @@ resource "aws_iam_policy" "GetAuthorizationToken" {
 }
 
 resource "aws_iam_policy" "AllowPush" {
-  name = "AllowPush-${var.username}"
+  name = "AllowPush"
   path = "/"
     description = "Allows the user to push images to the ECR registry"
     policy = jsonencode({
