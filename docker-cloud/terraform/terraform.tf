@@ -9,13 +9,13 @@ terraform {
     bucket  = "rita-terraform-state"
     key     = "state.tfstate"
     region  = "eu-west-2"
-    profile = "cyfplus"
+    #profile = "cyfplus"
   }
   
 }
 
 provider "aws" {
-  profile = "cyfplus"
+  #profile = "cyfplus"
   region = "us-east-1"
   default_tags {
     tags = {
@@ -28,7 +28,7 @@ provider "aws" {
 
 provider "aws" {
   alias = "global_region"
-  profile = "cyfplus"
+  #profile = "cyfplus"
   region = "eu-west-2"
   default_tags {
     tags = {
