@@ -9,14 +9,14 @@ terraform {
     bucket  = "rita-terraform-state"
     key     = "state.tfstate"
     region  = "eu-west-2"
-    #profile = "cyfplus"
+    profile = "cyfplus"
   }
   
 }
 
 provider "aws" {
-  #profile = "cyfplus"
-  region = "eu-west-2"
+  profile = "cyfplus"
+  region = "us-east-1"
   default_tags {
     tags = {
       Name = "RitaGlushkova/immersive-go-course"
@@ -28,8 +28,8 @@ provider "aws" {
 
 provider "aws" {
   alias = "global_region"
-  #profile = "cyfplus"
-  region = "us-east-1"
+  profile = "cyfplus"
+  region = "eu-west-2"
   default_tags {
     tags = {
       Name = "RitaGlushkova/immersive-go-course"

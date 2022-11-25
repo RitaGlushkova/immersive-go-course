@@ -1,10 +1,10 @@
-# resource "aws_ecs_service" "mongo" {
-#   name            = "mongodb"
-#   cluster         = aws_ecs_cluster.foo.id
-#   task_definition = aws_ecs_task_definition.mongo.arn
-#   desired_count   = 3
-#   iam_role        = aws_iam_role.foo.arn
-#   depends_on      = [aws_iam_role_policy.foo]
+# resource "aws_ecs_service" "docker_cloud" {
+#   name            = "docker-cloud-${var.username}"
+#   cluster         = aws_ecs_cluster.docker_cloud.id
+#   task_definition = aws_ecs_task_definition.docker_cloud.arn
+#   desired_count   = 1
+#   iam_role        = aws_iam_role.GitHubActionECRPublicPushImage.name
+#   depends_on      = [aws_iam_role_policy.Attachment]
 
 #   ordered_placement_strategy {
 #     type  = "binpack"
