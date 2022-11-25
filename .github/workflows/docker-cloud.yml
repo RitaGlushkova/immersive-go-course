@@ -87,7 +87,7 @@ jobs:
       - name: Terraform Init
         working-directory: docker-cloud/terraform
         id: init
-        run: terraform init -backend-config="bucket=rita-terraform-state"
+        run: terraform init
 
       - name: Terraform Validate
         working-directory: docker-cloud/terraform
