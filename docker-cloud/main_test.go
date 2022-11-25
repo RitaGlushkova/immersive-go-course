@@ -17,7 +17,7 @@ func TestEndpoints(t *testing.T) {
 		response := httptest.NewRecorder()
 		indexHandler(response, request)
 		assertStatus(t, response.Code, 200)
-		assertResponseBody(t, response.Body.String(), "Hello, world.")
+		assertResponseBody(t, response.Body.String(), "Hello, Rita.")
 	})
 	t.Run("testing ping handler", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/ping", nil)
