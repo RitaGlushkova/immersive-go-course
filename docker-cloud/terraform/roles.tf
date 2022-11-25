@@ -22,12 +22,12 @@ resource "aws_iam_role" "GitHubActionECRPublicPushImage" {
 })
 }
 
-resource "aws_iam_policy_attachment" "GetAuthorizationToken" {
-  roles      = aws_iam_role.GitHubActionECRPublicPushImage.name
+resource "aws_iam_role_policy_attachment" "GetAuthorizationToken" {
+  role      = aws_iam_role.GitHubActionECRPublicPushImage.name
   policy_arn = aws_iam_policy.GetAuthorizationToken.arn
 }
 
-resource "aws_iam_policy_attachment" "AllowPush" {
-  roles      = aws_iam_role.GitHubActionECRPublicPushImage.name
+resource "aws_iam_role_policy_attachment" "AllowPush" {
+  role      = aws_iam_role.GitHubActionECRPublicPushImage.name
   policy_arn = aws_iam_policy.AllowPush.arn
 }
