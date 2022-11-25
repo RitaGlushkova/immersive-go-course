@@ -7,9 +7,8 @@ import (
 	"os"
 )
 
-
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello, world."))
+	w.Write([]byte("Hello, Rita."))
 }
 
 func pingHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +25,5 @@ func main() {
 	http.HandleFunc("/ping", pingHandler)
 
 	fmt.Println("Listening")
-	log.Fatal(http.ListenAndServe(":" + httpPort, nil))
+	log.Fatal(http.ListenAndServe(":"+httpPort, nil))
 }
-
