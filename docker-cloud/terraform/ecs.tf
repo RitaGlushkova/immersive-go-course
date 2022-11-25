@@ -33,7 +33,7 @@ resource "aws_ecs_service" "docker_cloud" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.docker_cloud.arn
-    container_name   = "docker-cloud"
+    container_name   = "docker-cloud-${var.username}-container-terraform"
     container_port   = 80
   }
 
