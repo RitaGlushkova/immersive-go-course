@@ -11,8 +11,9 @@ terraform {
     region  = "eu-west-2"
     profile = "cyfplus"
   }
-
-  
+  default_tags {
+    tags = local.tags
+  }
 }
 
 locals {
@@ -20,14 +21,5 @@ locals {
     project = "docker-cloud"
     terraform   = "true"
     owner       = "rita"
-  }
-}
-
-provider "aws" {
-  region  = "eu-west-2"
-  profile = "cyfplus"
-
-  default_tags {
-    tags = local.tags
   }
 }
