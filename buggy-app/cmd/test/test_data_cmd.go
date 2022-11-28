@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/CodeYourFuture/immersive-go-course/buggy-app/util"
 	"github.com/jackc/pgx/v5"
@@ -187,12 +188,25 @@ func noteCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	if err != nil {
 		return fmt.Errorf("note: could not find owner, %w", err)
 	}
-	var content string
-	for i := 0; i < f.size; i++ {
-		content += f.content
-	}
+	fmt.Println("about to make content")
+	// var content string
+	// for i := 0; i < f.size; i++ {
+	// 	content += f.content
+	// }
+
+	// var builder strings.Builder
+	// builder.Grow(f.size * len(f.content))
+	// for i := 0; i < f.size; i++ {
+	// 	builder.WriteString(f.content)
+	// }
+	// var content = builder.String()
+
+	var content = strings.Repeat(f.content, f.size)
+	fmt.Println("CONTENT MADE")
 	var id string
+	fmt.Println("about to make query")
 	err = conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", f.owner, content).Scan(&id)
+	fmt.Println("query made")
 	if err != nil {
 		return fmt.Errorf("note: could not insert note, %w", err)
 	}

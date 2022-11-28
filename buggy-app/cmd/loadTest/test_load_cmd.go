@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/CodeYourFuture/immersive-go-course/buggy-app/util"
@@ -44,21 +45,29 @@ func main() {
 	}
 
 	// Create notes for each user
-	err = CreateNotesForAllUser(ctx, conn, users)
-	if err != nil {
-		log.Fatalf("error creating notes: %v", err)
+	for _, user := range users {
+		err = CreateTestNoteForUser(ctx, conn, user)
+		if err != nil {
+			log.Fatalf("error creating notes: %v", err)
+		}
 	}
 	var count int
 	// get note for each user
+	var wg sync.WaitGroup
+
 	for _, user := range users {
-		res, err := GetNoteForUser(ctx, conn, user)
-		if err != nil {
-			log.Fatalf("error getting note for user: %v", err)
-		}
-		fmt.Printf("Note number:%v\n", count)
-		fmt.Printf("Body: %s\n", string(res))
-		count += 1
+		wg.Add(1)
+		go func(u string) {
+			_, err := GetNoteForUser(ctx, conn, u)
+			if err != nil {
+				log.Fatalf("error getting note for user: %v", err)
+			}
+			fmt.Printf("User number:%v\n", count)
+			count += 1
+			wg.Done()
+		}(user)
 	}
+	wg.Wait()
 }
 
 func GetAllActiveUsers(ctx context.Context, conn *pgx.Conn) ([]string, error) {
@@ -79,18 +88,17 @@ func GetAllActiveUsers(ctx context.Context, conn *pgx.Conn) ([]string, error) {
 	return users, nil
 }
 
-func CreateNotesForAllUser(ctx context.Context, conn *pgx.Conn, users []string) error {
-	// create a note for a user
-	for _, user := range users {
-		err := conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", user, "#test").Scan(&user)
+func CreateTestNoteForUser(ctx context.Context, conn *pgx.Conn, user string) error {
+	// create a note for a user 3 times
+	for i := 0; i < 3; i++ {
+		var id string
+		err := conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", user, "#APPLE").Scan(&id)
 		if err != nil {
 			return fmt.Errorf("note: could not insert note, %w", err)
 		}
 	}
 	return nil
 }
-
-func UserBasicAuth() {}
 
 func GetNoteForUser(ctx context.Context, conn *pgx.Conn, user string) ([]byte, error) {
 	client := http.Client{Timeout: 5 * time.Second}
