@@ -48,6 +48,7 @@ type Flags struct {
 	// Note flags
 	content string
 	owner   string
+	size    int
 }
 
 func usage() {
@@ -171,6 +172,8 @@ func noteFlags(f *Flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("note", flag.ExitOnError)
 	fs.StringVar(&f.content, "content", "Example note content", "content of the created note")
 	fs.StringVar(&f.owner, "owner", "", "owner of the created note")
+	//can be used to generate a note with a large content
+	fs.IntVar(&f.size, "size", 1, "size of the created note")
 	return fs
 }
 
@@ -184,15 +187,18 @@ func noteCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	if err != nil {
 		return fmt.Errorf("note: could not find owner, %w", err)
 	}
-
+	var content string
+	for i := 0; i < f.size; i++ {
+		content += f.content
+	}
 	var id string
-	err = conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", f.owner, f.content).Scan(&id)
+	err = conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", f.owner, content).Scan(&id)
 	if err != nil {
 		return fmt.Errorf("note: could not insert note, %w", err)
 	}
 	log.Printf("new note created\n")
 	log.Printf("\tid: %s\n", id)
 	log.Printf("\towner: %s\n", f.owner)
-	log.Printf("\tcontent: %q\n", f.content)
+	log.Printf("\tcontent: %q\n", content)
 	return nil
 }
