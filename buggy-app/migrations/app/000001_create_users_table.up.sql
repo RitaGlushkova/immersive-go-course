@@ -87,6 +87,6 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- Add short ID trigger to user
 -- If an INSERT contains multiple RECORDs, each one will call
 -- gen_id individually.
-CREATE TRIGGER user_gen_id
-BEFORE INSERT ON public.user
-FOR EACH ROW EXECUTE PROCEDURE gen_id();
+-- CREATE TRIGGER user_gen_id
+-- BEFORE INSERT ON public.user
+-- FOR EACH ROW EXECUTE PROCEDURE gen_id();

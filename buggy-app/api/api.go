@@ -85,6 +85,7 @@ func (as *Service) handleMyNotes(w http.ResponseWriter, r *http.Request) {
 func (as *Service) handleMyNoteById(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// Get the authenticated user from the context -- this will have been written earlier
+
 	owner, ok := authuserctx.FromAuthenticatedContext(ctx)
 	if !ok {
 		as.config.Log.Printf("api: route handler reached with invalid auth context")

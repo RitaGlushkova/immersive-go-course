@@ -45,6 +45,8 @@ type Flags struct {
 	// User flags
 	passwd string
 	status string
+	id     string
+	update bool
 
 	// Note flags
 	content string
@@ -141,11 +143,16 @@ func userFlags(f *Flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("user", flag.ExitOnError)
 	fs.StringVar(&f.passwd, "password", "password", "password of the created user")
 	fs.StringVar(&f.status, "status", "active", "status of the created user")
+	fs.StringVar(&f.id, "id", "", "id of the created user")
+	fs.BoolVar(&f.update, "update", false, "update the user password with the given id")
 	return fs
 }
 
 // Create a user from command-line configuration
 func userCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
+	if f.id == "" {
+		return errors.New("id must be set")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(f.passwd), 10)
 	if err != nil {
 		return fmt.Errorf("user: could not hash password, %w", err)
@@ -156,11 +163,21 @@ func userCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	}
 
 	var id string
-	err = conn.QueryRow(ctx, "INSERT INTO public.user (status, password) VALUES ($1, $2) RETURNING id", f.status, hash).Scan(&id)
-	if err != nil {
-		return fmt.Errorf("user: could not insert user, %w", err)
+
+	if f.update {
+		err := conn.QueryRow(ctx, "UPDATE public.user SET password = $1 WHERE id = $2 RETURNING id", hash, f.id).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("user: could not insert user, %w", err)
+		}
+		log.Printf("user updated\n")
+	} else {
+		err = conn.QueryRow(ctx, "INSERT INTO public.user (id, status, password) VALUES ($1, $2, $3) RETURNING id", f.id, f.status, hash).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("user: could not insert user, %w", err)
+		}
+		log.Printf("new user created\n")
 	}
-	log.Printf("new user created\n")
+
 	log.Printf("\tid: %s\n", id)
 	log.Printf("\tstatus: %s\n", f.status)
 	log.Printf("\tpassword: %s\n", f.passwd)

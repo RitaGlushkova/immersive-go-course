@@ -58,10 +58,12 @@ func main() {
 	for _, user := range users {
 		wg.Add(1)
 		go func(u string) {
-			_, err := GetNoteForUser(ctx, conn, u)
+			res, err := GetNoteForUser(ctx, conn, u)
 			if err != nil {
 				log.Fatalf("error getting note for user: %v", err)
 			}
+			fmt.Println("user: ", u)
+			fmt.Println("response: ", string(res))
 			fmt.Printf("User number:%v\n", count)
 			count += 1
 			wg.Done()
@@ -121,5 +123,6 @@ func GetNoteForUser(ctx context.Context, conn *pgx.Conn, user string) ([]byte, e
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, err
 	}
+	fmt.Println("response: ", string(resBody))
 	return resBody, nil
 }

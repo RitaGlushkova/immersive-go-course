@@ -58,20 +58,25 @@ func GetNotesForOwner(ctx context.Context, conn dbConn, owner string) (Notes, er
 	return notes, nil
 }
 
-func GetNoteById(ctx context.Context, conn dbConn, id string, owner string) (Note, error) {
-	var note Note
+func GetNoteById(ctx context.Context, conn dbConn, id, owner string) (Note, error) {
+	note := Note{}
 	if id == "" {
 		return note, errors.New("model: id not supplied")
 	}
 
-	row := conn.QueryRow(ctx, "SELECT id, owner, content, created, modified FROM public.note WHERE id = $1 AND owner = $2", id, owner)
+	row := conn.QueryRow(ctx, "SELECT id, owner, content, created, modified FROM public.note WHERE id = $1", id)
 	fmt.Println(row)
 	err := row.Scan(&note.Id, &note.Owner, &note.Content, &note.Created, &note.Modified)
 	if err != nil {
 		return note, fmt.Errorf("model: query scan failed: %w", err)
 	}
-	note.Tags = extractTags(note.Content)
-	return note, nil
+	if note.Owner == owner {
+		note.Tags = extractTags(note.Content)
+		return note, nil
+	} else {
+		//returns empty note if owner does not match
+		return Note{}, nil
+	}
 }
 
 // Extract tags from the note. We're looking for #something. There could be
