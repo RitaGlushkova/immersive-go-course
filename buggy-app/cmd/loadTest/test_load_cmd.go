@@ -15,6 +15,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+type User struct {
+	id       string
+	password string
+}
+
 func main() {
 
 	// Set up a default POSTGRES_PASSWORD_FILE because we know where it's likely to be...
@@ -50,6 +55,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("error creating notes: %v", err)
 		}
+		fmt.Println("created notes for user: ", user.id)
 	}
 	var count int
 	// get note for each user
@@ -57,12 +63,12 @@ func main() {
 
 	for _, user := range users {
 		wg.Add(1)
-		go func(u string) {
+		go func(u User) {
 			res, err := GetNoteForUser(ctx, conn, u)
 			if err != nil {
 				log.Fatalf("error getting note for user: %v", err)
 			}
-			fmt.Println("user: ", u)
+			fmt.Println("user: ", u.id)
 			fmt.Println("response: ", string(res))
 			fmt.Printf("User number:%v\n", count)
 			count += 1
@@ -72,29 +78,29 @@ func main() {
 	wg.Wait()
 }
 
-func GetAllActiveUsers(ctx context.Context, conn *pgx.Conn) ([]string, error) {
+func GetAllActiveUsers(ctx context.Context, conn *pgx.Conn) ([]User, error) {
 	// return all active users
-	var users []string
-	rows, err := conn.Query(ctx, "SELECT id FROM public.user WHERE status = $1", "active")
+	var users []User
+	rows, err := conn.Query(ctx, "SELECT id, password FROM public.user WHERE status = $1", "active")
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		var id string
-		err = rows.Scan(&id)
+		var user User
+		err = rows.Scan(&user.id, &user.password)
 		if err != nil {
 			log.Fatal(err)
 		}
-		users = append(users, id)
+		users = append(users, user)
 	}
 	return users, nil
 }
 
-func CreateTestNoteForUser(ctx context.Context, conn *pgx.Conn, user string) error {
+func CreateTestNoteForUser(ctx context.Context, conn *pgx.Conn, user User) error {
 	// create a note for a user 3 times
 	for i := 0; i < 3; i++ {
 		var id string
-		err := conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", user, "#APPLE").Scan(&id)
+		err := conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", user.id, "#APPLE").Scan(&id)
 		if err != nil {
 			return fmt.Errorf("note: could not insert note, %w", err)
 		}
@@ -102,15 +108,15 @@ func CreateTestNoteForUser(ctx context.Context, conn *pgx.Conn, user string) err
 	return nil
 }
 
-func GetNoteForUser(ctx context.Context, conn *pgx.Conn, user string) ([]byte, error) {
+func GetNoteForUser(ctx context.Context, conn *pgx.Conn, user User) ([]byte, error) {
 	client := http.Client{Timeout: 5 * time.Second}
 
-	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8090/1/my/notes.json", http.NoBody)
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8090/1/my/notes.json", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	req.SetBasicAuth(user, "banana")
+	//password is hashed in the database so how do I get the password to login?
+	req.SetBasicAuth(user.id, "banana")
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -121,6 +127,7 @@ func GetNoteForUser(ctx context.Context, conn *pgx.Conn, user string) ([]byte, e
 
 	resBody, err := io.ReadAll(res.Body)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		fmt.Println("error getting note for user: ", user.id)
 		return nil, err
 	}
 	fmt.Println("response: ", string(resBody))

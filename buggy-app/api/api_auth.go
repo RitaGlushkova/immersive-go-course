@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -26,7 +27,8 @@ func (as *Service) wrapAuth(client auth.Client, handler http.HandlerFunc) http.H
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-
+		fmt.Println(id, "ID")
+		fmt.Println(passwd, "PASSWD")
 		// Use the auth client to check if this id/password combo is approved
 		result, err := client.Verify(ctx, id, passwd)
 		if err != nil {

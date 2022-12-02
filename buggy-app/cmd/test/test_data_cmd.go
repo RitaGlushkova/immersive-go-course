@@ -6,9 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"github.com/CodeYourFuture/immersive-go-course/buggy-app/util"
 	"github.com/jackc/pgx/v5"
@@ -60,6 +62,8 @@ func usage() {
 }
 
 func main() {
+	//this should help rand.Intn to generate different values but it doesn't
+	rand.Seed(time.Now().UnixNano())
 	f := &Flags{}
 	if len(os.Args) < 2 {
 		log.Println("error: not enough arguments, expected one of: user, note")
@@ -148,10 +152,21 @@ func userFlags(f *Flags) *flag.FlagSet {
 	return fs
 }
 
+var charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func randomString(n int) string {
+	sb := strings.Builder{}
+	sb.Grow(n)
+	for i := 0; i < n; i++ {
+		sb.WriteByte(charset[rand.Intn(len(charset))])
+	}
+	return sb.String()
+}
+
 // Create a user from command-line configuration
 func userCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	if f.id == "" {
-		return errors.New("id must be set")
+		f.id = randomString(8)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(f.passwd), 10)
 	if err != nil {
@@ -206,10 +221,6 @@ func noteCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 		return fmt.Errorf("note: could not find owner, %w", err)
 	}
 	fmt.Println("about to make content")
-	// var content string
-	// for i := 0; i < f.size; i++ {
-	// 	content += f.content
-	// }
 
 	// var builder strings.Builder
 	// builder.Grow(f.size * len(f.content))
