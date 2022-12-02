@@ -93,6 +93,7 @@ func GetAllActiveUsers(ctx context.Context, conn *pgx.Conn) ([]User, error) {
 		}
 		users = append(users, user)
 	}
+	//password is hashed in the database so how do I get the password to login?
 	return users, nil
 }
 
