@@ -1,0 +1,1 @@
+go run . --input /inputs/input.csv --output /outputs/output.csv --output-failed /outputs/failed.csv

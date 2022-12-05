@@ -1,0 +1,4 @@
+AWS_REGION=eu-west-2
+AWS_PROFILE=cyfplus
+AWS_ROLE_ARN=arn:aws:iam::297880250375:role/GoCourseLambdaUserReadWriteS3Rita
+S3_BUCKET=batch-processing-rita

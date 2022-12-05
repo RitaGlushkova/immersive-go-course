@@ -53,6 +53,11 @@ RUN mkdir -p /outputs
 # This is required for test and run, but for develop it ensures we have a build cache
 RUN go build -o /out
 
+# Set up environment
+ENV AWS_REGION ""
+ENV AWS_ROLE_ARN ""
+ENV S3_BUCKET ""
+
 ##
 ## TEST
 ##
@@ -74,4 +79,4 @@ ENTRYPOINT [ "/bin/bash" ]
 FROM base as run
 
 WORKDIR /
-ENTRYPOINT /out --input /inputs/gradient.jpg --output /outputs/gradient_bw.jpg
+ENTRYPOINT /out --input /inputs/input.csv --output /outputs/output.csv --output-failed /outputs/failed.csv
