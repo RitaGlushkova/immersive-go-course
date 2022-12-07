@@ -11,6 +11,7 @@ func main() {
 	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": "host1:9092,host2:9092",
 		"group.id":          "myGroup",
+		//what is it?
 		"auto.offset.reset": "smallest"})
 	if err != nil {
 		panic(err)

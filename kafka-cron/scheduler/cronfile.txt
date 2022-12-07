@@ -1,0 +1,3 @@
+* * * * *,echo, hello world
+*/2 * * * *,echo, hello rita
+*/3 * * * * ,echo, hello santa
