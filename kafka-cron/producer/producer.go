@@ -1,18 +1,11 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"encoding/json"
-	"strings"
-
-	//"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
-	//"github.com/confluentinc/examples/clients/cloud/go/ccloud"
-	"github.com/google/shlex"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
@@ -25,50 +18,6 @@ type cronjob struct {
 	Args    []string `json:"args"`
 	// cluster string
 	// retries int
-}
-
-// CreateTopic creates a topic using the Admin Client API
-func CreateTopic(p *kafka.Producer, topic string) {
-
-	a, err := kafka.NewAdminClientFromProducer(p)
-	if err != nil {
-		fmt.Printf("Failed to create new admin client from producer: %s", err)
-		os.Exit(1)
-	}
-	// Contexts are used to abort or limit the amount of time
-	// the Admin call blocks waiting for a result.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Create topics on cluster.
-	// Set Admin options to wait up to 60s for the operation to finish on the remote cluster
-	maxDur, err := time.ParseDuration("60s")
-	if err != nil {
-		fmt.Printf("ParseDuration(60s): %s", err)
-		os.Exit(1)
-	}
-	results, err := a.CreateTopics(
-		ctx,
-		// Multiple topics can be created simultaneously
-		// by providing more TopicSpecification structs here.
-		[]kafka.TopicSpecification{{
-			Topic:             topic,
-			NumPartitions:     2,
-			ReplicationFactor: 1}},
-		// Admin options
-		kafka.SetAdminOperationTimeout(maxDur))
-	if err != nil {
-		fmt.Printf("Admin Client request error: %v\n", err)
-		os.Exit(1)
-	}
-	for _, result := range results {
-		if result.Error.Code() != kafka.ErrNoError && result.Error.Code() != kafka.ErrTopicAlreadyExists {
-			fmt.Printf("Failed to create topic: %v\n", result.Error)
-			os.Exit(1)
-		}
-		fmt.Printf("%v\n", result)
-	}
-	a.Close()
-
 }
 
 func main() {
@@ -138,13 +87,14 @@ func main() {
 
 	log.Info("Create new cron")
 	cron := cron.New(cron.WithSeconds())
-	cronjobs := readCrontabfile("crontab.txt")
+	cronjobs, err := readCrontabfile("crontab.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
 	for _, job := range cronjobs {
 		myJob := job
 		_, er := cron.AddFunc(job.Crontab, func() {
-			fmt.Println(&myJob)
 			recordValue, _ := json.Marshal(&myJob)
-			fmt.Printf("type: %T\n", myJob)
 			message := kafka.Message{
 				TopicPartition: kafka.TopicPartition{Topic: &topic,
 					Partition: kafka.PartitionAny},
@@ -160,8 +110,8 @@ func main() {
 		}
 		fmt.Printf("cronjobs: started cron for %+v\n", myJob)
 	}
-	cron.Run()
-
+	cron.Start()
+	time.Sleep(1 * time.Minute)
 	fmt.Printf("Flushing outstanding messages\n")
 	// Flush the Producer queue
 	t := 10000
@@ -172,33 +122,4 @@ func main() {
 	}
 	// Now we can exit
 	p.Close()
-}
-
-func readCrontabfile(path string) []cronjob {
-	readFile, err := os.Open("cronfile.txt")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer readFile.Close()
-	fileScanner := bufio.NewScanner(readFile)
-	fileScanner.Split(bufio.ScanLines)
-	var fileLines []string
-	for fileScanner.Scan() {
-		fileLines = append(fileLines, fileScanner.Text())
-	}
-	result := make([]cronjob, 0)
-	for _, line := range fileLines {
-		val, err := shlex.Split(line)
-		if err != nil {
-			fmt.Println(err)
-		}
-		cj := cronjob{
-			Crontab: strings.Join(val[0:6], " "),
-			Command: val[6],
-			Args:    val[7:],
-		}
-		result = append(result, cj)
-	}
-
-	return result
 }
