@@ -1,19 +1,31 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"strings"
+
+	//"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/confluentinc/examples/clients/cloud/go/ccloud"
+	//"github.com/confluentinc/examples/clients/cloud/go/ccloud"
+	"github.com/google/shlex"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-// RecordValue represents the struct of the value in a Kafka message
-type RecordValue ccloud.RecordValue
+type cronjob struct {
+	Crontab string   `json:"crontab"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	// cluster string
+	// retries int
+}
 
 // CreateTopic creates a topic using the Admin Client API
 func CreateTopic(p *kafka.Producer, topic string) {
@@ -40,8 +52,8 @@ func CreateTopic(p *kafka.Producer, topic string) {
 		// by providing more TopicSpecification structs here.
 		[]kafka.TopicSpecification{{
 			Topic:             topic,
-			NumPartitions:     1,
-			ReplicationFactor: 3}},
+			NumPartitions:     2,
+			ReplicationFactor: 1}},
 		// Admin options
 		kafka.SetAdminOperationTimeout(maxDur))
 	if err != nil {
@@ -60,123 +72,133 @@ func CreateTopic(p *kafka.Producer, topic string) {
 }
 
 func main() {
+	topic := "test_topic"
 
-	// Initialization
-	configFile, topic := ccloud.ParseArgs()
-	conf := ccloud.ReadCCloudConfig(*configFile)
+	// Store the config
+	c := kafka.ConfigMap{
+		"bootstrap.servers": "localhost:9092",
+		"acks":              "all"}
 
-	// Create Producer instance
-	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": conf["bootstrap.servers"],
-		"sasl.mechanisms":   conf["sasl.mechanisms"],
-		"security.protocol": conf["security.protocol"],
-		"sasl.username":     conf["sasl.username"],
-		"sasl.password":     conf["sasl.password"]})
+	// Create the producer. Variable p holds the new Producer instance.
+	p, err := kafka.NewProducer(&c)
+
+	// Check for errors
 	if err != nil {
-		fmt.Printf("Failed to create producer: %s", err)
-		os.Exit(1)
+		if ke, ok := err.(kafka.Error); ok {
+			switch ec := ke.Code(); ec {
+			case kafka.ErrInvalidArg:
+				fmt.Printf("Can't create the producer because you've configured it wrong (code: %d)!\n\t%v\n", ec, err)
+				os.Exit(1)
+			default:
+				fmt.Printf("Can't create the producer (code: %d)!\n\t%v\n", ec, err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("There's a generic error creating the Producer! %v", err.Error())
+			os.Exit(1)
+		}
+
 	}
 
 	// Create topic if needed
-	CreateTopic(p, *topic)
+	CreateTopic(p, topic)
 
-	// Go-routine to handle message delivery reports and
-	// possibly other event types (errors, stats, etc)
+	//Handle eny events that come back from the producer
 	go func() {
+		//true
 		for e := range p.Events() {
+			// The `select` blocks until one of the `case` conditions
+			// are met - therefore we run it in a Go Routine.
 			switch ev := e.(type) {
 			case *kafka.Message:
+				// It's a delivery report
 				if ev.TopicPartition.Error != nil {
-					fmt.Printf("Failed to deliver message: %v\n", ev.TopicPartition)
+					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
+						string(ev.Value),
+						string(*ev.TopicPartition.Topic),
+						ev.TopicPartition.Error)
 				} else {
-					fmt.Printf("Successfully produced record to topic %s partition [%d] @ offset %v\n",
-						*ev.TopicPartition.Topic, ev.TopicPartition.Partition, ev.TopicPartition.Offset)
+					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
+						string(ev.Value),
+						string(ev.Key),
+						string(*ev.TopicPartition.Topic),
+						ev.TopicPartition.Partition,
+						ev.TopicPartition.Offset)
 				}
+			case kafka.Error:
+				// It's an error
+				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
+			default:
+				// It's not anything we were expecting
+				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
+
 			}
 		}
 	}()
 
-	for n := 0; n < 10; n++ {
-		// Create UUIDv4
-		recordKey := uuid.NewString()
-		data := &RecordValue{
-			Count: n}
-		recordValue, _ := json.Marshal(&data)
-		fmt.Printf("Preparing to produce record: %s\t%s\n", recordKey, recordValue)
-		p.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: topic, Partition: kafka.PartitionAny},
-			Key:            []byte(recordKey),
-			Value:          []byte(recordValue),
-		}, nil)
+	log.Info("Create new cron")
+	cron := cron.New(cron.WithSeconds())
+	cronjobs := readCrontabfile("crontab.txt")
+	for _, job := range cronjobs {
+		myJob := job
+		_, er := cron.AddFunc(job.Crontab, func() {
+			fmt.Println(&myJob)
+			recordValue, _ := json.Marshal(&myJob)
+			fmt.Printf("type: %T\n", myJob)
+			message := kafka.Message{
+				TopicPartition: kafka.TopicPartition{Topic: &topic,
+					Partition: kafka.PartitionAny},
+				Key:   []byte(uuid.New().String()),
+				Value: []byte(recordValue),
+			}
+			if err = p.Produce(&message, nil); err != nil {
+				fmt.Printf("Failed to produce message: %s\n", err.Error())
+			}
+		})
+		if er != nil {
+			fmt.Println(er)
+		}
+		fmt.Printf("cronjobs: started cron for %+v\n", myJob)
 	}
+	cron.Run()
 
-	// Wait for all messages to be delivered
-	p.Flush(15 * 1000)
-
-	fmt.Printf("10 messages were produced to topic %s!", *topic)
-
+	fmt.Printf("Flushing outstanding messages\n")
+	// Flush the Producer queue
+	t := 10000
+	if r := p.Flush(t); r > 0 {
+		fmt.Printf("\n--\n⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
+	} else {
+		fmt.Println("\n--\n✨ All messages flushed from the queue")
+	}
+	// Now we can exit
 	p.Close()
-
 }
 
-// package main
+func readCrontabfile(path string) []cronjob {
+	readFile, err := os.Open("cronfile.txt")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer readFile.Close()
+	fileScanner := bufio.NewScanner(readFile)
+	fileScanner.Split(bufio.ScanLines)
+	var fileLines []string
+	for fileScanner.Scan() {
+		fileLines = append(fileLines, fileScanner.Text())
+	}
+	result := make([]cronjob, 0)
+	for _, line := range fileLines {
+		val, err := shlex.Split(line)
+		if err != nil {
+			fmt.Println(err)
+		}
+		cj := cronjob{
+			Crontab: strings.Join(val[0:6], " "),
+			Command: val[6],
+			Args:    val[7:],
+		}
+		result = append(result, cj)
+	}
 
-// import (
-// 	"fmt"
-// 	"math/rand"
-// 	"os"
-
-// 	"github.com/confluentinc/confluent-kafka-go/kafka"
-// )
-
-// func main() {
-
-// 	if len(os.Args) != 2 {
-// 		fmt.Fprintf(os.Stderr, "Usage: %s <config-file-path>\n",
-// 			os.Args[0])
-// 		os.Exit(1)
-// 	}
-// 	configFile := os.Args[1]
-// 	conf := ReadConfig(configFile)
-
-// 	topic := "purchases"
-// 	p, err := kafka.NewProducer(&conf)
-
-// 	if err != nil {
-// 		fmt.Printf("Failed to create producer: %s", err)
-// 		os.Exit(1)
-// 	}
-
-// 	// Go-routine to handle message delivery reports and
-// 	// possibly other event types (errors, stats, etc)
-// 	go func() {
-// 		for e := range p.Events() {
-// 			switch ev := e.(type) {
-// 			case *kafka.Message:
-// 				if ev.TopicPartition.Error != nil {
-// 					fmt.Printf("Failed to deliver message: %v\n", ev.TopicPartition)
-// 				} else {
-// 					fmt.Printf("Produced event to topic %s: key = %-10s value = %s\n",
-// 						*ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
-// 				}
-// 			}
-// 		}
-// 	}()
-
-// 	users := [...]string{"eabara", "jsmith", "sgarcia", "jbernard", "htanaka", "awalther"}
-// 	items := [...]string{"book", "alarm clock", "t-shirts", "gift card", "batteries"}
-
-// 	for n := 0; n < 10; n++ {
-// 		key := users[rand.Intn(len(users))]
-// 		data := items[rand.Intn(len(items))]
-// 		p.Produce(&kafka.Message{
-// 			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-// 			Key:            []byte(key),
-// 			Value:          []byte(data),
-// 		}, nil)
-// 	}
-
-// 	// Wait for all messages to be delivered
-// 	p.Flush(15 * 1000)
-// 	p.Close()
-// }
+	return result
+}

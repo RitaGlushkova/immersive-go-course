@@ -1,0 +1,2 @@
+* * * * * * echo hello world
+*/3 * * * * * python3 -c "import os; print(os.getcwd())" 
