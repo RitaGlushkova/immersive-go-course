@@ -96,10 +96,9 @@ func main() {
 		_, er := cron.AddFunc(job.Crontab, func() {
 			recordValue, _ := json.Marshal(&myJob)
 			message := kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic,
-					Partition: kafka.PartitionAny},
-				Key:   []byte(uuid.New().String()),
-				Value: []byte(recordValue),
+				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+				Key:            []byte(uuid.New().String()),
+				Value:          []byte(recordValue),
 			}
 			if err = p.Produce(&message, nil); err != nil {
 				fmt.Printf("Failed to produce message: %s\n", err.Error())

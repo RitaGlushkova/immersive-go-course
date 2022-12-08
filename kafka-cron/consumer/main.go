@@ -101,6 +101,7 @@ func main() {
 		}
 	}
 	fmt.Printf("👋 … and we're done. Closing the consumer and exiting.\n")
+
 	// Now we can exit
 	c.Close()
 }

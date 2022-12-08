@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 	"os"
 	"time"
+
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
 // CreateTopic creates a topic using the Admin Client API
@@ -34,7 +35,7 @@ func CreateTopic(p *kafka.Producer, topic string) {
 		[]kafka.TopicSpecification{{
 			Topic:             topic,
 			NumPartitions:     2,
-			ReplicationFactor: 1}},
+			ReplicationFactor: 3}},
 		// Admin options
 		kafka.SetAdminOperationTimeout(maxDur))
 	if err != nil {
