@@ -43,7 +43,7 @@ func main() {
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-	// Variable p holds the new Consumer instance.
+
 	c, err := kafka.NewConsumer(&cm)
 	// Check for errors in creating the Consumer
 	if err != nil {
