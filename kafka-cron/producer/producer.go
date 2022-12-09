@@ -29,7 +29,7 @@ func main() {
 		"bootstrap.servers": "localhost:9092",
 		"acks":              "all"}
 
-	// Create the producer. Variable p holds the new Producer instance.
+	// Create the producer
 	p, err := kafka.NewProducer(&c)
 
 	// Check for errors
@@ -50,18 +50,14 @@ func main() {
 
 	}
 
-	// Create topic if needed
+	// Create topic
 	CreateTopic(p, topic)
 
-	//Handle eny events that come back from the producer
 	go func() {
-		//true
 		for e := range p.Events() {
-			// The `select` blocks until one of the `case` conditions
-			// are met - therefore we run it in a Go Routine.
 			switch ev := e.(type) {
 			case *kafka.Message:
-				// It's a delivery report
+
 				if ev.TopicPartition.Error != nil {
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
@@ -133,8 +129,6 @@ func CreateTopic(p *kafka.Producer, topic string) {
 		fmt.Printf("Failed to create new admin client from producer: %s", err)
 		os.Exit(1)
 	}
-	// Contexts are used to abort or limit the amount of time
-	// the Admin call blocks waiting for a result.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Create topics on cluster.
@@ -146,13 +140,10 @@ func CreateTopic(p *kafka.Producer, topic string) {
 	}
 	results, err := a.CreateTopics(
 		ctx,
-		// Multiple topics can be created simultaneously
-		// by providing more TopicSpecification structs here.
 		[]kafka.TopicSpecification{{
 			Topic:             topic,
 			NumPartitions:     2,
 			ReplicationFactor: 1}},
-		// Admin options
 		kafka.SetAdminOperationTimeout(maxDur))
 	if err != nil {
 		fmt.Printf("Admin Client request error: %v\n", err)
