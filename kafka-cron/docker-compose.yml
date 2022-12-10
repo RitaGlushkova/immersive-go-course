@@ -36,3 +36,30 @@ services:
       KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+  producer:
+    build:
+      context: .
+      dockerfile: ./producer/Dockerfile
+    depends_on:
+      - kafka1
+    volumes:
+      - ./producer/cronfile.txt:/cronfile.txt
+    command: ["/build"]
+
+  # cluster-a:
+  #   depends_on:
+  #     kafka1:
+  #       condition: service_healthy
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command: ["/build", "--topic", "test_topic", "--group", "cluster-a"]
+
+  # cluster-b:
+  #   depends_on:
+  #     kafka1:
+  #       condition: service_healthy
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command: ["/build", "--topic", "my_topic", "--group", "cluster-b"]

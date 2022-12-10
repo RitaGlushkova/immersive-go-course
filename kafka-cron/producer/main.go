@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
@@ -22,7 +25,8 @@ type cronjob struct {
 }
 
 func main() {
-	topic := "test_topic"
+	topic1 := "test_topic"
+	topic2 := "my_topic"
 
 	// Store the config
 	c := kafka.ConfigMap{
@@ -51,8 +55,16 @@ func main() {
 	}
 
 	// Create topic
-	CreateTopic(p, topic)
-
+	err = CreateTopic(p, topic1, 2, 1)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	err = CreateTopic(p, topic2, 1, 1)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	go func() {
 		for e := range p.Events() {
 			switch ev := e.(type) {
@@ -89,16 +101,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	for _, job := range cronjobs {
 		myJob := job
 		_, er := cron.AddFunc(job.Crontab, func() {
 			recordValue, _ := json.Marshal(&myJob)
-			message := kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+			message1 := kafka.Message{
+				TopicPartition: kafka.TopicPartition{Topic: &topic1, Partition: kafka.PartitionAny},
 				Key:            []byte(uuid.New().String()),
 				Value:          []byte(recordValue),
 			}
-			if err = p.Produce(&message, nil); err != nil {
+			message2 := kafka.Message{
+				TopicPartition: kafka.TopicPartition{Topic: &topic2, Partition: kafka.PartitionAny},
+				Key:            []byte(uuid.New().String()),
+				Value:          []byte(recordValue),
+			}
+			if err = p.Produce(&message1, nil); err != nil {
+				fmt.Printf("Failed to produce message: %s\n", err.Error())
+			}
+			if err = p.Produce(&message2, nil); err != nil {
 				fmt.Printf("Failed to produce message: %s\n", err.Error())
 			}
 		})
@@ -107,8 +128,8 @@ func main() {
 		}
 		fmt.Printf("cronjobs: started cron for %+v\n", myJob)
 	}
-	cron.Start()
-	time.Sleep(1 * time.Minute)
+	cron.Run()
+	//time.Sleep(1 * time.Minute)
 	fmt.Printf("Flushing outstanding messages\n")
 	// Flush the Producer queue
 	t := 10000
@@ -117,17 +138,18 @@ func main() {
 	} else {
 		fmt.Println("\n--\n✨ All messages flushed from the queue")
 	}
+
 	// Now we can exit
 	p.Close()
 }
 
 // CreateTopic creates a topic using the Admin Client API
-func CreateTopic(p *kafka.Producer, topic string) {
+func CreateTopic(p *kafka.Producer, topic string, partitions, replicas int) error {
 
 	a, err := kafka.NewAdminClientFromProducer(p)
 	if err != nil {
-		fmt.Printf("Failed to create new admin client from producer: %s", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create new admin client from producer: %s", err)
+
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -135,27 +157,56 @@ func CreateTopic(p *kafka.Producer, topic string) {
 	// Set Admin options to wait up to 60s for the operation to finish on the remote cluster
 	maxDur, err := time.ParseDuration("60s")
 	if err != nil {
-		fmt.Printf("ParseDuration(60s): %s", err)
-		os.Exit(1)
+		return fmt.Errorf("ParseDuration(60s): %s", err)
+
 	}
 	results, err := a.CreateTopics(
 		ctx,
 		[]kafka.TopicSpecification{{
 			Topic:             topic,
-			NumPartitions:     2,
-			ReplicationFactor: 1}},
+			NumPartitions:     partitions,
+			ReplicationFactor: replicas}},
 		kafka.SetAdminOperationTimeout(maxDur))
 	if err != nil {
-		fmt.Printf("Admin Client request error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("admin Client request error: %v", err)
+
 	}
 	for _, result := range results {
 		if result.Error.Code() != kafka.ErrNoError && result.Error.Code() != kafka.ErrTopicAlreadyExists {
-			fmt.Printf("Failed to create topic: %v\n", result.Error)
-			os.Exit(1)
+			return fmt.Errorf("failed to create topic: %v", result.Error)
+
 		}
 		fmt.Printf("%v\n", result)
 	}
 	a.Close()
+	return nil
+}
 
+func readCrontabfile(path string) ([]cronjob, error) {
+	readFile, err := os.Open("cronfile.txt")
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %v", err)
+	}
+	defer readFile.Close()
+	fileScanner := bufio.NewScanner(readFile)
+	fileScanner.Split(bufio.ScanLines)
+	var fileLines []string
+	for fileScanner.Scan() {
+		fileLines = append(fileLines, fileScanner.Text())
+	}
+	result := make([]cronjob, 0)
+	for _, line := range fileLines {
+		val, err := shlex.Split(line)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing line: %v", err)
+		}
+		cj := cronjob{
+			Crontab: strings.Join(val[0:6], " "),
+			Command: val[6],
+			Args:    val[7:],
+		}
+		result = append(result, cj)
+	}
+
+	return result, nil
 }

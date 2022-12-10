@@ -104,18 +104,20 @@ func main() {
 				if err != nil {
 					fmt.Println(err)
 				}
-				execJob(cronJob.Command, cronJob.Args)
-
+				out, err := execJob(cronJob.Command, cronJob.Args)
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Println(string(out))
 			case kafka.Error:
 				// It's an error
-				em := ev.(kafka.Error)
-				fmt.Printf("Caught an error:\n\t%v\n", em)
+				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
 				if e.Code() == kafka.ErrAllBrokersDown {
 					run = false
 				}
 			default:
 				// It's not anything we were expecting
-				fmt.Printf("Got an event that's not a Message, Error, or PartitionEOF 👻\n\t%v\n", ev)
+				fmt.Printf("Ignored event \n\t%v\n", ev)
 
 			}
 		}
@@ -126,14 +128,14 @@ func main() {
 	c.Close()
 }
 
-func execJob(command string, args []string) {
+func execJob(command string, args []string) ([]byte, error) {
 	cmd := exec.Command(command, args...)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.Output()
 	if err != nil {
 		fmt.Println(err.Error())
-		return
+		return nil, err
 	}
 	fmt.Println("Command Successfully Executed")
-	fmt.Println(string(stdout))
+	return stdout, nil
 }
