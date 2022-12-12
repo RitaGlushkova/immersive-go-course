@@ -35,7 +35,7 @@ func main() {
 
 	// Store the config
 	cm := kafka.ConfigMap{
-		"bootstrap.servers":  "localhost:9092",
+		"bootstrap.servers":  "kafka1:29092",
 		"group.id":           *consumerGroup,
 		"session.timeout.ms": 6000,
 		"auto.offset.reset":  "earliest",

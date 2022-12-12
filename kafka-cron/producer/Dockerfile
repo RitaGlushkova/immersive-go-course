@@ -1,10 +1,11 @@
 FROM golang:1.19-alpine
-RUN apk add build-base
 
 WORKDIR /app
+
 COPY go.mod ./
 COPY go.sum ./
 RUN go mod download
 
 COPY ./producer ./
-RUN go build -o /build
+RUN apk add build-base
+RUN go build -o /build -tags musl

@@ -30,7 +30,7 @@ func main() {
 
 	// Store the config
 	c := kafka.ConfigMap{
-		"bootstrap.servers": "localhost:9092",
+		"bootstrap.servers": "kafka1:29092",
 		"acks":              "all"}
 
 	// Create the producer
