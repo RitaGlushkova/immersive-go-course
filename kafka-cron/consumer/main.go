@@ -28,6 +28,7 @@ const (
 var (
 	consumerGroup = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
 	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
+	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
 )
 
 func main() {
@@ -35,10 +36,11 @@ func main() {
 
 	// Store the config
 	cm := kafka.ConfigMap{
-		"bootstrap.servers":  "kafka1:29092",
+		"bootstrap.servers":  *kafkaBroker,
 		"group.id":           *consumerGroup,
 		"session.timeout.ms": 6000,
 		"auto.offset.reset":  "earliest",
+		"enable.auto.commit": false,
 	}
 
 	sigchan := make(chan os.Signal, 1)

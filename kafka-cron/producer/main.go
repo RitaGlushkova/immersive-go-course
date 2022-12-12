@@ -4,13 +4,18 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/shlex"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -20,18 +25,42 @@ type cronjob struct {
 	Crontab string   `json:"crontab"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	// cluster string
-	// retries int
+	Cluster string
+	Retries int
+}
+
+var (
+	kafkaBroker  = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
+	LatencyGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "golang",
+			Name:      "latency_gauge",
+			Help:      "metric that tracks the latency",
+		}, []string{
+			"endpoint",
+		})
+)
+
+func init() {
+	// Metrics have to be registered to be exposed:
+	//It only can be run once !!
+	prometheus.MustRegister(LatencyGauge)
+	http.Handle("/metrics", promhttp.Handler())
 }
 
 func main() {
+	_, err := setupPrometheus(2112)
+	if err != nil {
+		log.Fatal("Failed to listen on port :2112", err)
+	}
 	topic1 := "test_topic"
 	topic2 := "my_topic"
 
 	// Store the config
 	c := kafka.ConfigMap{
-		"bootstrap.servers": "kafka1:29092",
-		"acks":              "all"}
+		"bootstrap.servers": *kafkaBroker,
+		//"delivery.timeout.ms": 10000,
+		"acks": "all"}
 
 	// Create the producer
 	p, err := kafka.NewProducer(&c)
@@ -105,22 +134,30 @@ func main() {
 	for _, job := range cronjobs {
 		myJob := job
 		_, er := cron.AddFunc(job.Crontab, func() {
-			recordValue, _ := json.Marshal(&myJob)
-			message1 := kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic1, Partition: kafka.PartitionAny},
-				Key:            []byte(uuid.New().String()),
-				Value:          []byte(recordValue),
+
+			if myJob.Cluster == "cluster-a" {
+				recordValue, _ := json.Marshal(&myJob)
+				message1 := kafka.Message{
+					TopicPartition: kafka.TopicPartition{Topic: &topic1, Partition: kafka.PartitionAny},
+					Key:            []byte(uuid.New().String()),
+					Value:          []byte(recordValue),
+				}
+				err = p.Produce(&message1, nil)
+				if err != nil {
+					fmt.Printf("Failed to produce message: %s\n", err.Error())
+				}
 			}
-			message2 := kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic2, Partition: kafka.PartitionAny},
-				Key:            []byte(uuid.New().String()),
-				Value:          []byte(recordValue),
-			}
-			if err = p.Produce(&message1, nil); err != nil {
-				fmt.Printf("Failed to produce message: %s\n", err.Error())
-			}
-			if err = p.Produce(&message2, nil); err != nil {
-				fmt.Printf("Failed to produce message: %s\n", err.Error())
+			if myJob.Cluster == "cluster-b" {
+				recordValue, _ := json.Marshal(&myJob)
+				message2 := kafka.Message{
+					TopicPartition: kafka.TopicPartition{Topic: &topic2, Partition: kafka.PartitionAny},
+					Key:            []byte(uuid.New().String()),
+					Value:          []byte(recordValue),
+				}
+				err = p.Produce(&message2, nil)
+				if err != nil {
+					fmt.Printf("Failed to produce message: %s\n", err.Error())
+				}
 			}
 		})
 		if er != nil {
@@ -203,10 +240,19 @@ func readCrontabfile(path string) ([]cronjob, error) {
 		cj := cronjob{
 			Crontab: strings.Join(val[0:6], " "),
 			Command: val[6],
-			Args:    val[7:],
+			Args:    val[7 : len(val)-1],
+			Cluster: val[len(val)-1],
 		}
 		result = append(result, cj)
 	}
-
 	return result, nil
+}
+
+func setupPrometheus(port int) (int, error) {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return 0, err
+	}
+	go http.Serve(lis, nil)
+	return lis.Addr().(*net.TCPAddr).Port, nil
 }

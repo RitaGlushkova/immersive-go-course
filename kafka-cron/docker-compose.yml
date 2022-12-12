@@ -1,18 +1,10 @@
 version: "2.1"
 
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
 services:
-  # prometheus:
-  #   image: prom/prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   volumes:
-  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
-  # grafana:
-  #   image: grafana/grafana
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./grafana:/var/lib/grafana
   zoo1:
     image: confluentinc/cp-zookeeper:7.3.0
     hostname: zoo1
@@ -48,29 +40,96 @@ services:
       KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
-
-  producer:
-    build:
-      context: .
-      dockerfile: ./producer/Dockerfile
-    depends_on:
-      - kafka1
+      KAFKA_OPTS: -javaagent:/usr/share/java/cp-base-new/jmx_prometheus_javaagent-0.14.0.jar=8999:/kafka-jmx-config.yaml
     volumes:
-      - ./producer/cronfile.txt:/cronfile.txt
-    command: ["/build"]
-
-  cluster-a:
+      - ./kafka-jmx-config.yaml:/kafka-jmx-config.yaml
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    restart: "no"
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka1:29092"
     depends_on:
-      - kafka1
-    build:
-      context: .
-      dockerfile: ./consumer/Dockerfile
-    command: ["/build", "--topic", "test_topic", "--group", "cluster-a"]
+      - "kafka1"
 
-  cluster-b:
-    depends_on:
-      - kafka1
-    build:
-      context: .
-      dockerfile: ./consumer/Dockerfile
-    command: ["/build", "--topic", "my_topic", "--group", "cluster-b"]
+  # producer:
+  #   build:
+  #     context: .
+  #     dockerfile: ./producer/Dockerfile
+  #   depends_on:
+  #     - kafka1
+  #   volumes:
+  #     - ./producer/cronfile.txt:/cronfile.txt
+  #   command: ["/build", "--broker", "kafka1:29092"]
+
+  # cluster-a:
+  #   depends_on:
+  #     - kafka1
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command:
+  #     [
+  #       "/build",
+  #       "--broker",
+  #       "kafka1:29092",
+  #       "--topic",
+  #       "test_topic",
+  #       "--group",
+  #       "cluster-a",
+  #     ]
+
+  # cluster-b:
+  #   depends_on:
+  #     - kafka1
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command:
+  #     [
+  #       "/build",
+  #       "--broker",
+  #       "kafka1:29092",
+  #       "--topic",
+  #       "my_topic",
+  #       "--group",
+  #       "cluster-b",
+  #     ]
+
+  # alertmanager:
+  #   container_name: alertmanager
+  #   hostname: alertmanager
+  #   image: prom/alertmanager
+  #   volumes:
+  #     - ./alertmanager.conf:/etc/alertmanager/alertmanager.conf
+  #   command:
+  #     - "--config.file=/etc/alertmanager/alertmanager.conf"
+  #   ports:
+  #     - 9093:9093
+
+  # prometheus:
+  #   container_name: prometheus
+  #   hostname: prometheus
+  #   image: prom/prometheus
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - ./alert_rules.yml:/etc/prometheus/alert_rules.yml
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - "--config.file=/etc/prometheus/prometheus.yml"
+  #   links:
+  #     - alertmanager:alertmanager
+  #   ports:
+  #     - 9090:9090
+
+  # grafana:
+  #   container_name: grafana
+  #   hostname: grafana
+  #   image: grafana/grafana
+  #   volumes:
+  #     - ./grafana_datasources.yml:/etc/grafana/provisioning/datasources/all.yaml
+  #     - ./grafana_config.ini:/etc/grafana/config.ini
+  #     - grafana_data:/var/lib/grafana
+  #   ports:
+  #     - 3000:3000
