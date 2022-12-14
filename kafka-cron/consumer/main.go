@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/google/uuid"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -16,8 +17,8 @@ type cronjob struct {
 	Crontab string   `json:"crontab"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	// cluster string
-	// retries int
+	Cluster string   `json:"cluster"`
+	Retries int      `json:"retries"`
 }
 
 const (
@@ -33,6 +34,55 @@ var (
 
 func main() {
 	flag.Parse()
+
+	p, errP := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": *kafkaBroker})
+	// Check for errors
+	if errP != nil {
+		if ke, ok := errP.(kafka.Error); ok {
+			switch ec := ke.Code(); ec {
+			case kafka.ErrInvalidArg:
+				fmt.Printf("Can't create the producer because you've configured it wrong (code: %d)!\n\t%v\n", ec, errP)
+				os.Exit(1)
+			default:
+				fmt.Printf("Can't create the producer (code: %d)!\n\t%v\n", ec, errP)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("There's a generic error creating the Producer! %v", errP.Error())
+			os.Exit(1)
+		}
+	}
+
+	go func() {
+		for e := range p.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+
+				if ev.TopicPartition.Error != nil {
+					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
+						string(ev.Value),
+						string(*ev.TopicPartition.Topic),
+						ev.TopicPartition.Error)
+				} else {
+					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
+						string(ev.Value),
+						string(ev.Key),
+						string(*ev.TopicPartition.Topic),
+						ev.TopicPartition.Partition,
+						ev.TopicPartition.Offset)
+					fmt.Println(ev.TopicPartition)
+				}
+			case kafka.Error:
+				// It's an error
+				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
+			default:
+				// It's not anything we were expecting
+				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
+
+			}
+		}
+	}()
+	//cron := cron.New(cron.WithSeconds())
 
 	// Store the config
 	cm := kafka.ConfigMap{
@@ -96,7 +146,7 @@ func main() {
 				// It's a message
 				km := ev.(*kafka.Message)
 				cronJob := cronjob{}
-				fmt.Printf("✅ Message '%v' received from topic '%v' (partition %d at offset %d) key %v\n",
+				fmt.Printf("😻 Message '%v' received from topic '%v' (partition %d at offset %d) key %v\n",
 					string(km.Value),
 					string(*km.TopicPartition.Topic),
 					km.TopicPartition.Partition,
@@ -108,8 +158,56 @@ func main() {
 				}
 				out, err := execJob(cronJob.Command, cronJob.Args)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("😿 Error executing job", err)
+					if cronJob.Retries > 0 {
+						//Creating a new producer
+						//_, er := cron.AddFunc(cronJob.Crontab, func() {
+						recordValue, _ := json.Marshal(&cronJob)
+						topic := fmt.Sprintf("%v_retries", *kafkaTopic)
+						message := kafka.Message{
+							TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+							Key:            []byte(uuid.New().String()),
+							Value:          []byte(recordValue),
+						}
+						err = p.Produce(&message, nil)
+						if err != nil {
+							fmt.Printf("Failed to produce message: %s\n", err.Error())
+						}
+						cronJob.Retries = cronJob.Retries - 1
+						//})
+						//if er != nil {
+						//fmt.Println(er)
+						//}
+						//fmt.Printf("cronjobs: started cron for %+v\n", cronJob)
+						// cron.Start()
+						// time.Sleep(1 * time.Minute)
+						//fmt.Printf("Flushing outstanding messages\n")
+						// // Flush the Producer queue
+						// t := 10000
+						// if r := p.Flush(t); r > 0 {
+						// 	fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
+						// } else {
+						// 	fmt.Println("\n--\n✨ All messages flushed from the queue")
+						// }
+
+						// // Now we can exit
+						// p.Close()
+					} else {
+						fmt.Println("No retries left")
+						fmt.Printf("Flushing outstanding messages\n")
+						// Flush the Producer queue
+						t := 10000
+						if r := p.Flush(t); r > 0 {
+							fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
+						} else {
+							fmt.Println("\n--\n✨ All messages flushed from the queue")
+						}
+
+						// Now we can exit
+						p.Close()
+					}
 				}
+
 				fmt.Println(string(out))
 			case kafka.Error:
 				// It's an error

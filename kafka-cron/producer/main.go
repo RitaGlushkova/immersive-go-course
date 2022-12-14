@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,8 +26,8 @@ type cronjob struct {
 	Crontab string   `json:"crontab"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	Cluster string
-	Retries int
+	Cluster string   `json:"cluster"`
+	Retries int      `json:"retries"`
 }
 
 var (
@@ -53,9 +54,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to listen on port :2112", err)
 	}
-	topic1 := "test_topic"
-	topic2 := "my_topic"
-
+	topics := []string{"test_topic", "my_topic", "test_topic_retries", "my_topic_retries"}
+	partitions := []int{1, 2, 1, 1}
+	replicas := []int{1, 1, 1, 1}
 	// Store the config
 	c := kafka.ConfigMap{
 		"bootstrap.servers": *kafkaBroker,
@@ -84,16 +85,12 @@ func main() {
 	}
 
 	// Create topic
-	err = CreateTopic(p, topic1, 2, 1)
+	err = CreateTopic(p, topics, partitions, replicas)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	err = CreateTopic(p, topic2, 1, 1)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+
 	go func() {
 		for e := range p.Events() {
 			switch ev := e.(type) {
@@ -138,7 +135,7 @@ func main() {
 			if myJob.Cluster == "cluster-a" {
 				recordValue, _ := json.Marshal(&myJob)
 				message1 := kafka.Message{
-					TopicPartition: kafka.TopicPartition{Topic: &topic1, Partition: kafka.PartitionAny},
+					TopicPartition: kafka.TopicPartition{Topic: &topics[0], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}
@@ -150,7 +147,7 @@ func main() {
 			if myJob.Cluster == "cluster-b" {
 				recordValue, _ := json.Marshal(&myJob)
 				message2 := kafka.Message{
-					TopicPartition: kafka.TopicPartition{Topic: &topic2, Partition: kafka.PartitionAny},
+					TopicPartition: kafka.TopicPartition{Topic: &topics[1], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}
@@ -181,7 +178,7 @@ func main() {
 }
 
 // CreateTopic creates a topic using the Admin Client API
-func CreateTopic(p *kafka.Producer, topic string, partitions, replicas int) error {
+func CreateTopic(p *kafka.Producer, topics []string, partitions, replicas []int) error {
 
 	a, err := kafka.NewAdminClientFromProducer(p)
 	if err != nil {
@@ -197,12 +194,17 @@ func CreateTopic(p *kafka.Producer, topic string, partitions, replicas int) erro
 		return fmt.Errorf("ParseDuration(60s): %s", err)
 
 	}
+	var topicsSpec []kafka.TopicSpecification
+	for i, topic := range topics {
+		var topicSpec = kafka.TopicSpecification{
+			Topic:             topic,
+			NumPartitions:     partitions[i],
+			ReplicationFactor: replicas[i]}
+		topicsSpec = append(topicsSpec, topicSpec)
+	}
 	results, err := a.CreateTopics(
 		ctx,
-		[]kafka.TopicSpecification{{
-			Topic:             topic,
-			NumPartitions:     partitions,
-			ReplicationFactor: replicas}},
+		topicsSpec,
 		kafka.SetAdminOperationTimeout(maxDur))
 	if err != nil {
 		return fmt.Errorf("admin Client request error: %v", err)
@@ -237,11 +239,16 @@ func readCrontabfile(path string) ([]cronjob, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing line: %v", err)
 		}
+		retries, err := strconv.Atoi(val[len(val)-1])
+		if err != nil {
+			return nil, fmt.Errorf("retries arg couldn't be converted to a number: %v", err)
+		}
 		cj := cronjob{
 			Crontab: strings.Join(val[0:6], " "),
 			Command: val[6],
-			Args:    val[7 : len(val)-1],
-			Cluster: val[len(val)-1],
+			Args:    val[7 : len(val)-2],
+			Cluster: val[len(val)-2],
+			Retries: retries,
 		}
 		result = append(result, cj)
 	}

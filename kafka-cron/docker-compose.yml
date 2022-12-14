@@ -1,8 +1,8 @@
 version: "2.1"
 
-volumes:
-  prometheus_data: {}
-  grafana_data: {}
+# volumes:
+#   prometheus_data: {}
+#   grafana_data: {}
 
 services:
   zoo1:
@@ -40,9 +40,6 @@ services:
       KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
-      KAFKA_OPTS: -javaagent:/usr/share/java/cp-base-new/jmx_prometheus_javaagent-0.14.0.jar=8999:/kafka-jmx-config.yaml
-    volumes:
-      - ./kafka-jmx-config.yaml:/kafka-jmx-config.yaml
   kafdrop:
     image: obsidiandynamics/kafdrop
     restart: "no"
