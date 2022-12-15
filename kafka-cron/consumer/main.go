@@ -203,17 +203,17 @@ func main() {
 						//p.Close()
 					} else {
 						fmt.Println("No retries left")
-						fmt.Printf("Flushing outstanding messages\n")
-						// Flush the Producer queue
-						t := 10000
-						if r := p.Flush(t); r > 0 {
-							fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
-						} else {
-							fmt.Println("\n--\n✨ All messages flushed from the queue")
-						}
+						// fmt.Printf("Flushing outstanding messages\n")
+						// // Flush the Producer queue
+						// t := 10000
+						// if r := p.Flush(t); r > 0 {
+						// 	fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
+						// } else {
+						// 	fmt.Println("\n--\n✨ All messages flushed from the queue")
+						// }
 
-						// Now we can exit
-						p.Close()
+						// // Now we can exit
+						// p.Close()
 					}
 				}
 

@@ -55,13 +55,11 @@ services:
       - "kafka1"
 
   # producer:
+  #   depends_on:
+  #     - kafka1
   #   build:
   #     context: .
   #     dockerfile: ./producer/Dockerfile
-  #   depends_on:
-  #     - kafka1
-  #   volumes:
-  #     - ./producer/cronfile.txt:/cronfile.txt
   #   command: ["/build", "--broker", "kafka1:29092"]
 
   # cluster-a:
@@ -80,7 +78,22 @@ services:
   #       "--group",
   #       "cluster-a",
   #     ]
-
+  # cluster-a-retries:
+  #   depends_on:
+  #     - kafka1
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command:
+  #     [
+  #       "/build",
+  #       "--broker",
+  #       "kafka1:29092",
+  #       "--topic",
+  #       "test_topic_retries",
+  #       "--group",
+  #       "cluster-a",
+  #     ]
   # cluster-b:
   #   depends_on:
   #     - kafka1
@@ -94,6 +107,22 @@ services:
   #       "kafka1:29092",
   #       "--topic",
   #       "my_topic",
+  #       "--group",
+  #       "cluster-b",
+  #     ]
+  # cluster-b-retries:
+  #   depends_on:
+  #     - kafka1
+  #   build:
+  #     context: .
+  #     dockerfile: ./consumer/Dockerfile
+  #   command:
+  #     [
+  #       "/build",
+  #       "--broker",
+  #       "kafka1:29092",
+  #       "--topic",
+  #       "my_topic_retries",
   #       "--group",
   #       "cluster-b",
   #     ]

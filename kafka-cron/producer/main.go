@@ -50,6 +50,7 @@ func init() {
 }
 
 func main() {
+	flag.Parse()
 	_, err := setupPrometheus(2112)
 	if err != nil {
 		log.Fatal("Failed to listen on port :2112", err)
@@ -59,9 +60,9 @@ func main() {
 	replicas := []int{1, 1, 1, 1}
 	// Store the config
 	c := kafka.ConfigMap{
-		"bootstrap.servers": *kafkaBroker,
-		//"delivery.timeout.ms": 10000,
-		"acks": "all"}
+		"bootstrap.servers":   *kafkaBroker,
+		"delivery.timeout.ms": 10000,
+		"acks":                "all"}
 
 	// Create the producer
 	p, err := kafka.NewProducer(&c)
@@ -122,7 +123,7 @@ func main() {
 	}()
 
 	log.Info("Create new cron")
-	cron := cron.New()
+	cron := cron.New(cron.WithSeconds())
 	cronjobs, err := readCrontabfile("crontab.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -244,9 +245,9 @@ func readCrontabfile(path string) ([]cronjob, error) {
 			return nil, fmt.Errorf("retries arg couldn't be converted to a number: %v", err)
 		}
 		cj := cronjob{
-			Crontab: strings.Join(val[0:5], " "),
-			Command: val[5],
-			Args:    val[6 : len(val)-2],
+			Crontab: strings.Join(val[0:6], " "),
+			Command: val[6],
+			Args:    val[7 : len(val)-2],
 			Cluster: val[len(val)-2],
 			Retries: retries,
 		}
