@@ -398,7 +398,7 @@ Percentage of the requests served within a certain time (ms)
 
 Notice that all of our requests took about the same time this time around, and none were much slower - this shows that our server wasn't getting stressed.
 
-One of the things we find in real life is that failure is inevitable. Computers lose power, servers get overloaded and slow down or stop working all together, networks break, etc. Our job as engineers isn't to _prevent_ failure, it's to try to make our systems behave as well as possible _depite_ failure.
+One of the things we find in real life is that failure is inevitable. Computers lose power, servers get overloaded and slow down or stop working all together, networks break, etc. Our job as engineers isn't to _prevent_ failure, it's to try to make our systems behave as well as possible _despite_ failure.
 
 In this exercise, we chose to make some of our requests fail fast, so that all of the requests that we _did_ process, got processed well (none were really slow, and our server didn't get overloaded).
 
