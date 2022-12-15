@@ -1,4 +1,4 @@
-*/3 * * * * * python3 -c "import os; print(os.getcwd())" cluster-a 2
-*/6 * * * * * ech hello error cluster-b 3
-*/6 * * * * * echo hello success cluster-b 3
-*/6 * * * * * nc -vz localhost 9009 cluster-a 3
+* * * * * python3 -c "import os; print(os.getcwd())" cluster-a 2
+* * * * * ech hello error cluster-b 3
+* * * * * echo hello success cluster-b 3
+* * * * * nc -vz localhost 9009 cluster-a 3

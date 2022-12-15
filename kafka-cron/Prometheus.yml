@@ -30,7 +30,7 @@ scrape_configs:
     scrape_interval: 5s
     static_configs:
       - targets: ["docker.for.mac.host.internal:2112"]
-  - job_name: "consumer cluster-a"
+  - job_name: "consumer cluster-b"
     metrics_path: "/metrics"
     scrape_interval: 5s
     static_configs:

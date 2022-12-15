@@ -122,7 +122,7 @@ func main() {
 	}()
 
 	log.Info("Create new cron")
-	cron := cron.New(cron.WithSeconds())
+	cron := cron.New()
 	cronjobs, err := readCrontabfile("crontab.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -244,9 +244,9 @@ func readCrontabfile(path string) ([]cronjob, error) {
 			return nil, fmt.Errorf("retries arg couldn't be converted to a number: %v", err)
 		}
 		cj := cronjob{
-			Crontab: strings.Join(val[0:6], " "),
-			Command: val[6],
-			Args:    val[7 : len(val)-2],
+			Crontab: strings.Join(val[0:5], " "),
+			Command: val[5],
+			Args:    val[6 : len(val)-2],
 			Cluster: val[len(val)-2],
 			Retries: retries,
 		}

@@ -7,9 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
-	"github.com/google/uuid"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -132,7 +133,7 @@ func main() {
 			run = false
 		default:
 
-			ev := c.Poll(1000)
+			ev := c.Poll(3000)
 			if ev == nil {
 				// the Poll timed out and we got nothing'
 				fmt.Printf("……\n")
@@ -159,28 +160,36 @@ func main() {
 				out, err := execJob(cronJob.Command, cronJob.Args)
 				if err != nil {
 					fmt.Println("😿 Error executing job", err)
+					fmt.Println(cronJob.Retries, "retries left")
 					if cronJob.Retries > 0 {
 						//Creating a new producer
 						//_, er := cron.AddFunc(cronJob.Crontab, func() {
+						cronJob.Retries = cronJob.Retries - 1
+						fmt.Println(cronJob.Retries, "Reties before sending to kafka")
 						recordValue, _ := json.Marshal(&cronJob)
-						topic := fmt.Sprintf("%v_retries", *kafkaTopic)
+						var topic string
+						if strings.Contains(*kafkaTopic, "_retries") {
+							topic = *kafkaTopic
+						} else {
+							topic = fmt.Sprintf("%v_retries", *kafkaTopic)
+						}
 						message := kafka.Message{
 							TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-							Key:            []byte(uuid.New().String()),
+							Key:            []byte(km.Key),
 							Value:          []byte(recordValue),
 						}
 						err = p.Produce(&message, nil)
 						if err != nil {
 							fmt.Printf("Failed to produce message: %s\n", err.Error())
 						}
-						cronJob.Retries = cronJob.Retries - 1
+						fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
 						//})
 						//if er != nil {
 						//fmt.Println(er)
 						//}
 						//fmt.Printf("cronjobs: started cron for %+v\n", cronJob)
 						// cron.Start()
-						// time.Sleep(1 * time.Minute)
+						time.Sleep(5 * time.Second)
 						//fmt.Printf("Flushing outstanding messages\n")
 						// // Flush the Producer queue
 						// t := 10000
@@ -191,7 +200,7 @@ func main() {
 						// }
 
 						// // Now we can exit
-						// p.Close()
+						//p.Close()
 					} else {
 						fmt.Println("No retries left")
 						fmt.Printf("Flushing outstanding messages\n")
