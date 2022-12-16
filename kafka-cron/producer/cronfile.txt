@@ -1,4 +1,4 @@
 */20 * * * * * python3 -c "import os; print(os.getcwd())" cluster-a 2
-*/30 * * * * * ech hello error cluster-b 3
 */10 * * * * * echo hello success cluster-b 3
-*/50 * * * * * nc -vz localhost 9009 cluster-a 3
+*/60 * * * * * nc -vz host.docker.internal 9009 cluster-a 3
+*/40 * * * * * ech hello success cluster-b 3

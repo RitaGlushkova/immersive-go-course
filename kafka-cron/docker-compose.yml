@@ -44,6 +44,13 @@ services:
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
       KAFKA_OPTS: -javaagent:/usr/share/java/cp-base-new/jmx_prometheus_javaagent-0.14.0.jar=8999:/kafka-jmx-config.yml
+    healthcheck:
+      test: nc -z localhost 9092 || exit -1
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   kafdrop:
     image: obsidiandynamics/kafdrop
     restart: "no"
@@ -52,80 +59,103 @@ services:
     environment:
       KAFKA_BROKERCONNECT: "kafka1:29092"
     depends_on:
-      - "kafka1"
+      kafka1:
+        condition: service_healthy
+  producer:
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    volumes:
+      - ./producer/cronfile.txt:/cronfile.txt
+    build:
+      context: .
+      dockerfile: ./producer/Dockerfile
+    command: ["/build", "--broker", "kafka1:29092"]
 
-  # producer:
-  #   depends_on:
-  #     - kafka1
-  #   build:
-  #     context: .
-  #     dockerfile: ./producer/Dockerfile
-  #   command: ["/build", "--broker", "kafka1:29092"]
+  cluster-a:
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "test_topic",
+        "--group",
+        "cluster-a",
+      ]
+  cluster-a-retries:
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "test_topic_retries",
+        "--group",
+        "cluster-a",
+      ]
+  cluster-b:
+    depends_on:
+      - kafka1
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "my_topic",
+        "--group",
+        "cluster-b",
+      ]
 
-  # cluster-a:
-  #   depends_on:
-  #     - kafka1
-  #   build:
-  #     context: .
-  #     dockerfile: ./consumer/Dockerfile
-  #   command:
-  #     [
-  #       "/build",
-  #       "--broker",
-  #       "kafka1:29092",
-  #       "--topic",
-  #       "test_topic",
-  #       "--group",
-  #       "cluster-a",
-  #     ]
-  # cluster-a-retries:
-  #   depends_on:
-  #     - kafka1
-  #   build:
-  #     context: .
-  #     dockerfile: ./consumer/Dockerfile
-  #   command:
-  #     [
-  #       "/build",
-  #       "--broker",
-  #       "kafka1:29092",
-  #       "--topic",
-  #       "test_topic_retries",
-  #       "--group",
-  #       "cluster-a",
-  #     ]
-  # cluster-b:
-  #   depends_on:
-  #     - kafka1
-  #   build:
-  #     context: .
-  #     dockerfile: ./consumer/Dockerfile
-  #   command:
-  #     [
-  #       "/build",
-  #       "--broker",
-  #       "kafka1:29092",
-  #       "--topic",
-  #       "my_topic",
-  #       "--group",
-  #       "cluster-b",
-  #     ]
-  # cluster-b-retries:
-  #   depends_on:
-  #     - kafka1
-  #   build:
-  #     context: .
-  #     dockerfile: ./consumer/Dockerfile
-  #   command:
-  #     [
-  #       "/build",
-  #       "--broker",
-  #       "kafka1:29092",
-  #       "--topic",
-  #       "my_topic_retries",
-  #       "--group",
-  #       "cluster-b",
-  #     ]
+  cluster-b2:
+    depends_on:
+      - kafka1
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "my_topic",
+        "--group",
+        "cluster-b",
+      ]
+  cluster-b-retries:
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "my_topic_retries",
+        "--group",
+        "cluster-b",
+      ]
 
   alertmanager:
     container_name: alertmanager

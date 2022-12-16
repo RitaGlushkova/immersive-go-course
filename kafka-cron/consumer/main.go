@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -11,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -32,6 +35,13 @@ var (
 	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
 	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
 )
+
+func init() {
+	// Metrics have to be registered to be exposed:
+	//It only can be run once !!
+	prometheus.MustRegister(LatencyGauge)
+	http.Handle("/metrics", promhttp.Handler())
+}
 
 func main() {
 	flag.Parse()
@@ -147,7 +157,7 @@ func main() {
 				// It's a message
 				km := ev.(*kafka.Message)
 				cronJob := cronjob{}
-				fmt.Printf("😻 Message '%v' received from topic '%v' (partition %d at offset %d) key %v\n",
+				fmt.Printf("💌 Message '%v' received from topic '%v' (partition %d at offset %d) key %v\n",
 					string(km.Value),
 					string(*km.TopicPartition.Topic),
 					km.TopicPartition.Partition,
@@ -245,6 +255,6 @@ func execJob(command string, args []string) ([]byte, error) {
 		fmt.Println(err.Error())
 		return nil, err
 	}
-	fmt.Println("Command Successfully Executed")
+	fmt.Println("😻 Command Successfully Executed")
 	return stdout, nil
 }

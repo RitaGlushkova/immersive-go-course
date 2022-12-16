@@ -124,7 +124,7 @@ func main() {
 
 	log.Info("Create new cron")
 	cron := cron.New(cron.WithSeconds())
-	cronjobs, err := readCrontabfile("crontab.txt")
+	cronjobs, err := readCrontabfile("/cronfile.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func CreateTopic(p *kafka.Producer, topics []string, partitions, replicas []int)
 }
 
 func readCrontabfile(path string) ([]cronjob, error) {
-	readFile, err := os.Open("cronfile.txt")
+	readFile, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %v", err)
 	}

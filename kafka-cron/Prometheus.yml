@@ -24,14 +24,29 @@ scrape_configs:
     metrics_path: "/metrics"
     scrape_interval: 5s
     static_configs:
-      - targets: ["docker.for.mac.host.internal:2112"]
+      - targets: ["producer:2112"]
   - job_name: "consumer cluster-a"
     metrics_path: "/metrics"
     scrape_interval: 5s
     static_configs:
-      - targets: ["docker.for.mac.host.internal:2112"]
+      - targets: ["cluster-a:2112"]
+  - job_name: "consumer cluster-a-retries"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["cluster-a-retries:2112"]
   - job_name: "consumer cluster-b"
     metrics_path: "/metrics"
     scrape_interval: 5s
     static_configs:
-      - targets: ["docker.for.mac.host.internal:2112"]
+      - targets: ["cluster-b:2112"]
+  - job_name: "consumer cluster-b2"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["cluster-b2:2112"]
+  - job_name: "consumer cluster-b-retries"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["cluster-b-retries:2112"]
