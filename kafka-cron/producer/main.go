@@ -16,6 +16,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
@@ -31,25 +32,40 @@ type cronjob struct {
 }
 
 var (
-	kafkaBroker  = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
-	LatencyGauge = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "golang",
-			Name:      "latency_gauge",
-			Help:      "metric that tracks the latency",
-		}, []string{
-			"endpoint",
-		})
+	kafkaBroker = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
+
+	// Metrics have to be registered to be exposed:
+	ErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "producer_error_counter",
+		Help: "metric that counts errors in the producer",
+	}, []string{
+		"topic", "error_type",
+	})
+
+	SuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "producer_success_counter",
+		Help: "metric that counts successes in the producer",
+	}, []string{
+		"topic",
+	})
+
+	LatencyMessageProduce = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "producer_message_latency",
+		Help:    "metric that tracks the latency of producing messages",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic", "error_type",
+	})
 )
 
 func init() {
-	// Metrics have to be registered to be exposed:
+
 	//It only can be run once !!
-	prometheus.MustRegister(LatencyGauge)
 	http.Handle("/metrics", promhttp.Handler())
 }
 
 func main() {
+
 	flag.Parse()
 	_, err := setupPrometheus(2112)
 	if err != nil {
@@ -96,13 +112,17 @@ func main() {
 		for e := range p.Events() {
 			switch ev := e.(type) {
 			case *kafka.Message:
-
 				if ev.TopicPartition.Error != nil {
+					//Prometheus
+					ErrorCounter.WithLabelValues(*ev.TopicPartition.Topic, "massage_delivery").Inc()
+					//Print
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
 						string(*ev.TopicPartition.Topic),
 						ev.TopicPartition.Error)
 				} else {
+					//Prometheus
+					SuccessCounter.WithLabelValues(*ev.TopicPartition.Topic).Inc()
 					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
 						string(ev.Value),
 						string(ev.Key),
@@ -132,31 +152,34 @@ func main() {
 	for _, job := range cronjobs {
 		myJob := job
 		_, er := cron.AddFunc(job.Crontab, func() {
-
+			var message kafka.Message
 			if myJob.Cluster == "cluster-a" {
 				recordValue, _ := json.Marshal(&myJob)
-				message1 := kafka.Message{
+				message = kafka.Message{
 					TopicPartition: kafka.TopicPartition{Topic: &topics[0], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}
-				err = p.Produce(&message1, nil)
-				if err != nil {
-					fmt.Printf("Failed to produce message: %s\n", err.Error())
-				}
 			}
 			if myJob.Cluster == "cluster-b" {
 				recordValue, _ := json.Marshal(&myJob)
-				message2 := kafka.Message{
+				message = kafka.Message{
 					TopicPartition: kafka.TopicPartition{Topic: &topics[1], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}
-				err = p.Produce(&message2, nil)
-				if err != nil {
-					fmt.Printf("Failed to produce message: %s\n", err.Error())
-				}
 			}
+			//Prometheus
+			start := time.Now()
+			errStr := ""
+			err = p.Produce(&message, nil)
+			if err != nil {
+				//Prometheus
+				ErrorCounter.WithLabelValues(*message.TopicPartition.Topic, "message_production").Inc()
+				fmt.Printf("Failed to produce message: %s\n", err.Error())
+				errStr = err.Error()
+			}
+			LatencyMessageProduce.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(start).Seconds())
 		})
 		if er != nil {
 			fmt.Println(er)

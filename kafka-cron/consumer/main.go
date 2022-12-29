@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
@@ -34,18 +37,37 @@ var (
 	consumerGroup = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
 	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
 	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
+	ErrorCounter  = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "consumer_error_counter",
+		Help: "metric that tracks the error",
+	}, []string{
+		"topic", "error_type",
+	})
+	SuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "consumer_success_counter",
+		Help: "metric that tracks the success in the consumer",
+	}, []string{
+		"topic", "type",
+	})
+	LatencyExecution = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "consumer_execution_latency",
+		Help:    "metric that tracks the latency of executing commands",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic",
+	})
 )
 
 func init() {
-	// Metrics have to be registered to be exposed:
-	//It only can be run once !!
-	prometheus.MustRegister(LatencyGauge)
 	http.Handle("/metrics", promhttp.Handler())
 }
 
 func main() {
 	flag.Parse()
-
+	_, err := setupPrometheus(2112)
+	if err != nil {
+		log.Fatal("Failed to listen on port :2112", err)
+	}
 	p, errP := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": *kafkaBroker})
 	// Check for errors
 	if errP != nil {
@@ -70,11 +92,15 @@ func main() {
 			case *kafka.Message:
 
 				if ev.TopicPartition.Error != nil {
+					//Prometheus
+					ErrorCounter.WithLabelValues(*ev.TopicPartition.Topic, "producer_retries_delivery").Inc()
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
 						string(*ev.TopicPartition.Topic),
 						ev.TopicPartition.Error)
 				} else {
+					//Prometheus
+					SuccessCounter.WithLabelValues(*ev.TopicPartition.Topic, "producer_retries_delivery").Inc()
 					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
 						string(ev.Value),
 						string(ev.Key),
@@ -84,16 +110,17 @@ func main() {
 					fmt.Println(ev.TopicPartition)
 				}
 			case kafka.Error:
+				ErrorCounter.WithLabelValues(*kafkaTopic, "producer_retries_delivery").Inc()
 				// It's an error
 				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
 			default:
+				ErrorCounter.WithLabelValues(*kafkaTopic, "producer_retries_delivery").Inc()
 				// It's not anything we were expecting
 				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
 
 			}
 		}
 	}()
-	//cron := cron.New(cron.WithSeconds())
 
 	// Store the config
 	cm := kafka.ConfigMap{
@@ -154,6 +181,8 @@ func main() {
 			switch e := ev.(type) {
 
 			case *kafka.Message:
+				//Prometheus
+				start := time.Now()
 				// It's a message
 				km := ev.(*kafka.Message)
 				cronJob := cronjob{}
@@ -163,17 +192,21 @@ func main() {
 					km.TopicPartition.Partition,
 					km.TopicPartition.Offset,
 					string(km.Key))
+				SuccessCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_message_received").Inc()
 				err := json.Unmarshal(km.Value, &cronJob)
 				if err != nil {
+					//Prometheus
+					ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal").Inc()
 					fmt.Println(err)
 				}
 				out, err := execJob(cronJob.Command, cronJob.Args)
+				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 				if err != nil {
+					//Prometheus
+					ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_execution").Inc()
 					fmt.Println("😿 Error executing job", err)
 					fmt.Println(cronJob.Retries, "retries left")
 					if cronJob.Retries > 0 {
-						//Creating a new producer
-						//_, er := cron.AddFunc(cronJob.Crontab, func() {
 						cronJob.Retries = cronJob.Retries - 1
 						fmt.Println(cronJob.Retries, "Reties before sending to kafka")
 						recordValue, _ := json.Marshal(&cronJob)
@@ -190,43 +223,17 @@ func main() {
 						}
 						err = p.Produce(&message, nil)
 						if err != nil {
+							//Prometheus
+							ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "produce_retries_produce_message").Inc()
 							fmt.Printf("Failed to produce message: %s\n", err.Error())
 						}
 						fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
-						//})
-						//if er != nil {
-						//fmt.Println(er)
-						//}
-						//fmt.Printf("cronjobs: started cron for %+v\n", cronJob)
-						// cron.Start()
 						time.Sleep(5 * time.Second)
-						//fmt.Printf("Flushing outstanding messages\n")
-						// // Flush the Producer queue
-						// t := 10000
-						// if r := p.Flush(t); r > 0 {
-						// 	fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
-						// } else {
-						// 	fmt.Println("\n--\n✨ All messages flushed from the queue")
-						// }
-
-						// // Now we can exit
-						//p.Close()
 					} else {
 						fmt.Println("No retries left")
-						// fmt.Printf("Flushing outstanding messages\n")
-						// // Flush the Producer queue
-						// t := 10000
-						// if r := p.Flush(t); r > 0 {
-						// 	fmt.Printf("\n--\n 🥺 Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
-						// } else {
-						// 	fmt.Println("\n--\n✨ All messages flushed from the queue")
-						// }
-
-						// // Now we can exit
-						// p.Close()
 					}
 				}
-
+				SuccessCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
 				fmt.Println(string(out))
 			case kafka.Error:
 				// It's an error
@@ -257,4 +264,13 @@ func execJob(command string, args []string) ([]byte, error) {
 	}
 	fmt.Println("😻 Command Successfully Executed")
 	return stdout, nil
+}
+
+func setupPrometheus(port int) (int, error) {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return 0, err
+	}
+	go http.Serve(lis, nil)
+	return lis.Addr().(*net.TCPAddr).Port, nil
 }
