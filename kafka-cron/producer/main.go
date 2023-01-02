@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net"
+	//"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -46,31 +46,49 @@ var (
 		Name: "producer_success_counter",
 		Help: "metric that counts successes in the producer",
 	}, []string{
-		"topic",
+		"topic", "job_type",
 	})
-
+	CronErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cron_error_counter",
+		Help: "metric that counts errors in the cron",
+	}, []string{
+		"cluster", "job_type",
+	})
+	CronSuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cron_success_counter",
+		Help: "metric that counts successes in the cron",
+	}, []string{
+		"cluster", "job_type",
+	})
 	LatencyMessageProduced = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "producer_message_latency",
+		Name:    "producer_message_latency_produced",
 		Help:    "metric that tracks the latency of producing messages",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic", "error_type",
+	})
+	LatencyMessageDelivered = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "producer_message_latency_delivered",
+		Help:    "metric that tracks the latency of delivering messages",
 		Buckets: prometheus.DefBuckets,
 	}, []string{
 		"topic", "error_type",
 	})
 )
 
-func init() {
+// func init() {
 
-	//It only can be run once !!
-	http.Handle("/metrics", promhttp.Handler())
-}
+// 	//It only can be run once !!
+// 	http.Handle("/metrics", promhttp.Handler())
+// }
 
 func main() {
-
+	setupPrometheus(2112)
 	flag.Parse()
-	_, err := setupPrometheus(2112)
-	if err != nil {
-		log.Fatal("Failed to listen on port :2112", err)
-	}
+	// _, err := setupPrometheus(2112)
+	// if err != nil {
+	// 	log.Fatal("Failed to listen on port :2112", err)
+	// }
 	topics := []string{"cluster-a-topic", "cluster-b-topic", "cluster-a-topic-retries", "cluster-b-topic-retries"}
 	partitions := []int{1, 2, 1, 1}
 	replicas := []int{1, 1, 1, 1}
@@ -114,7 +132,7 @@ func main() {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
 					//Prometheus
-					MessageCounterError.WithLabelValues(*ev.TopicPartition.Topic, "massage_delivery").Inc()
+					MessageCounterError.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_error").Inc()
 					//Print
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
@@ -122,7 +140,7 @@ func main() {
 						ev.TopicPartition.Error)
 				} else {
 					//Prometheus
-					MessageCounterSuccess.WithLabelValues(*ev.TopicPartition.Topic).Inc()
+					MessageCounterSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_to_topic").Inc()
 					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
 						string(ev.Value),
 						string(ev.Key),
@@ -131,13 +149,14 @@ func main() {
 						ev.TopicPartition.Offset)
 					fmt.Println(ev.TopicPartition)
 				}
-			case kafka.Error:
+			case *kafka.Error:
 				// It's an error
 				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
+				MessageCounterError.WithLabelValues("all_topics", "message_delivery_kafka_error").Inc()
 			default:
 				// It's not anything we were expecting
 				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
-
+				MessageCounterError.WithLabelValues("all_topics", "message_delivery_unknown_error").Inc()
 			}
 		}
 	}()
@@ -151,7 +170,7 @@ func main() {
 
 	for _, job := range cronjobs {
 		myJob := job
-		_, er := cron.AddFunc(job.Crontab, func() {
+		_, cronErr := cron.AddFunc(job.Crontab, func() {
 			var message kafka.Message
 			if myJob.Cluster == "cluster-a" {
 				recordValue, _ := json.Marshal(&myJob)
@@ -175,16 +194,19 @@ func main() {
 			err = p.Produce(&message, nil)
 			if err != nil {
 				//Prometheus
-				MessageCounterError.WithLabelValues(*message.TopicPartition.Topic, "message_production").Inc()
+				MessageCounterError.WithLabelValues(*message.TopicPartition.Topic, "producing_message").Inc()
 				fmt.Printf("Failed to produce message: %s\n", err.Error())
 				errStr = err.Error()
 			}
 			LatencyMessageProduced.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(start).Seconds())
+			MessageCounterSuccess.WithLabelValues(*message.TopicPartition.Topic, "producing_message").Inc()
 		})
-		if er != nil {
-			fmt.Println(er)
+		if cronErr != nil {
+			fmt.Println(cronErr)
+			CronErrorCounter.WithLabelValues(myJob.Cluster, "cronjob_error").Inc()
 		}
 		fmt.Printf("cronjobs: started cron for %+v\n", myJob)
+		CronSuccessCounter.WithLabelValues(myJob.Cluster, "cronjob_success").Inc()
 	}
 	cron.Run()
 	//time.Sleep(1 * time.Minute)
@@ -279,11 +301,17 @@ func readCrontabfile(path string) ([]cronjob, error) {
 	return result, nil
 }
 
-func setupPrometheus(port int) (int, error) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return 0, err
-	}
-	go http.Serve(lis, nil)
-	return lis.Addr().(*net.TCPAddr).Port, nil
+//	func setupPrometheus(port int) (int, error) {
+//		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+//		if err != nil {
+//			return 0, err
+//		}
+//		go http.Serve(lis, nil)
+//		return lis.Addr().(*net.TCPAddr).Port, nil
+//	}
+func setupPrometheus(port int) {
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	}()
 }

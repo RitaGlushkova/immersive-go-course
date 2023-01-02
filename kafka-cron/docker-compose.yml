@@ -80,6 +80,24 @@ services:
         "cluster-a",
       ]
 
+  cluster-a-retries:
+    depends_on:
+      kafka1:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: ./consumer/Dockerfile
+    command:
+      [
+        "/build",
+        "--broker",
+        "kafka1:29092",
+        "--topic",
+        "cluster-a-topic-retries",
+        "--group",
+        "cluster-a",
+      ]
+
   cluster-b:
     depends_on:
       - kafka1
@@ -102,9 +120,9 @@ services:
     hostname: alertmanager
     image: prom/alertmanager
     volumes:
-      - ./alertmanager.conf:/etc/alertmanager/alertmanager.conf
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
     command:
-      - "--config.file=/etc/alertmanager/alertmanager.conf"
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
     ports:
       - 9093:9093
 

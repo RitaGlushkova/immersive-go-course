@@ -11,3 +11,16 @@ groups:
         # Labels - additional labels to be attached to the alert
         labels:
           severity: "critical"
+
+  - name: ExecutionError
+    rules:
+      - alert: ExecutionErrorExceeded
+        # Condition for alerting
+        expr: counter_of_exceeded_retries > 3
+        # Annotation - additional informational labels to store more information
+        annotations:
+          title: "Jobs can not be executed after multiple retries"
+          description: " job reached max number of retries and couldn't execute"
+        # Labels - additional labels to be attached to the alert
+        labels:
+          severity: "critical"

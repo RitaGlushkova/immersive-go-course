@@ -1,21 +1,4 @@
 version: "2.1"
-cluster-a-retries:
-  depends_on:
-    kafka1:
-      condition: service_healthy
-  build:
-    context: .
-    dockerfile: ./consumer/Dockerfile
-  command:
-    [
-      "/build",
-      "--broker",
-      "kafka1:29092",
-      "--topic",
-      "cluster-a-topic-retries",
-      "--group",
-      "cluster-a",
-    ]
 
 cluster-b2:
   depends_on:
