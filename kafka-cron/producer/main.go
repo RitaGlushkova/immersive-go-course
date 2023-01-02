@@ -35,21 +35,21 @@ var (
 	kafkaBroker = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
 
 	// Metrics have to be registered to be exposed:
-	ErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	MessageCounterError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "producer_error_counter",
 		Help: "metric that counts errors in the producer",
 	}, []string{
 		"topic", "error_type",
 	})
 
-	SuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	MessageCounterSuccess = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "producer_success_counter",
 		Help: "metric that counts successes in the producer",
 	}, []string{
 		"topic",
 	})
 
-	LatencyMessageProduce = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	LatencyMessageProduced = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "producer_message_latency",
 		Help:    "metric that tracks the latency of producing messages",
 		Buckets: prometheus.DefBuckets,
@@ -71,7 +71,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to listen on port :2112", err)
 	}
-	topics := []string{"test_topic", "my_topic", "test_topic_retries", "my_topic_retries"}
+	topics := []string{"cluster-a-topic", "cluster-b-topic", "cluster-a-topic-retries", "cluster-b-topic-retries"}
 	partitions := []int{1, 2, 1, 1}
 	replicas := []int{1, 1, 1, 1}
 	// Store the config
@@ -114,7 +114,7 @@ func main() {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
 					//Prometheus
-					ErrorCounter.WithLabelValues(*ev.TopicPartition.Topic, "massage_delivery").Inc()
+					MessageCounterError.WithLabelValues(*ev.TopicPartition.Topic, "massage_delivery").Inc()
 					//Print
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
@@ -122,7 +122,7 @@ func main() {
 						ev.TopicPartition.Error)
 				} else {
 					//Prometheus
-					SuccessCounter.WithLabelValues(*ev.TopicPartition.Topic).Inc()
+					MessageCounterSuccess.WithLabelValues(*ev.TopicPartition.Topic).Inc()
 					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
 						string(ev.Value),
 						string(ev.Key),
@@ -175,11 +175,11 @@ func main() {
 			err = p.Produce(&message, nil)
 			if err != nil {
 				//Prometheus
-				ErrorCounter.WithLabelValues(*message.TopicPartition.Topic, "message_production").Inc()
+				MessageCounterError.WithLabelValues(*message.TopicPartition.Topic, "message_production").Inc()
 				fmt.Printf("Failed to produce message: %s\n", err.Error())
 				errStr = err.Error()
 			}
-			LatencyMessageProduce.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(start).Seconds())
+			LatencyMessageProduced.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(start).Seconds())
 		})
 		if er != nil {
 			fmt.Println(er)

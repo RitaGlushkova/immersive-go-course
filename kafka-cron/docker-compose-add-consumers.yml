@@ -12,7 +12,7 @@ cluster-a-retries:
       "--broker",
       "kafka1:29092",
       "--topic",
-      "test_topic_retries",
+      "cluster-a-topic-retries",
       "--group",
       "cluster-a",
     ]
@@ -29,7 +29,7 @@ cluster-b2:
       "--broker",
       "kafka1:29092",
       "--topic",
-      "my_topic",
+      "cluster-b-topic",
       "--group",
       "cluster-b",
     ]
@@ -46,7 +46,7 @@ cluster-b-retries:
       "--broker",
       "kafka1:29092",
       "--topic",
-      "my_topic_retries",
+      "cluster-b-topic-retries",
       "--group",
       "cluster-b",
     ]

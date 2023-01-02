@@ -75,7 +75,7 @@ services:
         "--broker",
         "kafka1:29092",
         "--topic",
-        "test_topic",
+        "cluster-a-topic",
         "--group",
         "cluster-a",
       ]
@@ -92,7 +92,7 @@ services:
         "--broker",
         "kafka1:29092",
         "--topic",
-        "my_topic",
+        "cluster-b-topic",
         "--group",
         "cluster-b",
       ]

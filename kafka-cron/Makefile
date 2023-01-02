@@ -7,7 +7,7 @@ start: ## Start all or c=<name> containers in background
 	docker-compose -f docker-compose.yml start $(c)
 down: ## Clean all data
 	docker-compose -f docker-compose.yml down $(c)
-	docker-compose -f docker-compose-moreClients.yml down
+	docker-compose -f docker-compose-add-consumers.yml down
 stop: ## Show status of containers
 	docker-compose -f docker-compose.yml stop $(c)
 restart: ## Restart all or c=<name> containers
@@ -15,16 +15,16 @@ restart: ## Restart all or c=<name> containers
 destroy: ## Clean all containers, images, volumes, networks, and undefined containers created with docker-compose.yml
 	docker-compose down --rmi all -v --remove-orphans $(c)
 up-more:  ## Start all or c=<name> containers in foreground
-	docker-compose -f docker-compose-moreClients.yml up $(c)
+	docker-compose -f docker-compose-add-consumers.yml up $(c)
 start-more: ## Start all or c=<name> containers in background
-	docker-compose -f docker-compose-moreClients.yml start $(c)
+	docker-compose -f docker-compose-add-consumers.yml start $(c)
 down-more: ## Clean all data
-	docker-compose -f docker-compose-moreClients.yml down $(c)
+	docker-compose -f docker-compose-add-consumers.yml down $(c)
 stop-more: ## Show status of containers
-	docker-compose -f docker-compose-moreClients.yml stop $(c)
+	docker-compose -f docker-compose-add-consumers.yml stop $(c)
 restart-more: ## Restart all or c=<name> containers
-	docker-compose -f docker-compose-moreClients.yml stop $(c)
-	docker-compose -f docker-compose-moreClients.yml up -d $(c)
+	docker-compose -f docker-compose-add-consumers.yml stop $(c)
+	docker-compose -f docker-compose-add-consumers.yml up -d $(c)
 up-ui:  ## Start all or c=<name> containers in foreground
 	docker-compose -f docker-compose-ui.yml up $(c)
 start-ui: ## Start all or c=<name> containers in background

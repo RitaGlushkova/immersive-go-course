@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,47 +27,63 @@ type cronjob struct {
 }
 
 const (
-	DefaultKafkaTopic    = "test_topic"
-	DefaultConsumerGroup = "myGroup"
+	DefaultKafkaTopic    = "cluster-a-topic"
+	DefaultConsumerGroup = "cluster-a"
 )
 
 var (
-	consumerGroup = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
-	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
-	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
-	ErrorCounter  = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "consumer_error_counter",
-		Help: "metric that tracks the error",
+	consumerGroup         = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
+	kafkaTopic            = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
+	kafkaBroker           = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
+	message_counter_error = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "message_counter_error",
+		Help: "metric that tracks the errors in the consumer or producer for retrying",
 	}, []string{
 		"topic", "error_type",
 	})
-	SuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "consumer_success_counter",
-		Help: "metric that tracks the success in the consumer",
+	message_counter_success = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "message_counter_success",
+		Help: "metric that tracks the success in the consumer or producer for retrying",
 	}, []string{
-		"topic", "type",
+		"topic", "job_type",
 	})
-	LatencyExecution = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "consumer_execution_latency",
-		Help:    "metric that tracks the latency of executing commands",
+	consumer_execution_latency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "consumer_execution_latency_error",
+		Help:    "metric that tracks the latency of executing jobs",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic",
+	})
+	consumer_execution_latency_success = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "consumer_execution_latency_error",
+		Help:    "metric that tracks the latency of successfully executing jobs",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic",
+	})
+	consumer_execution_latency_error = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "consumer_execution_latency_success",
+		Help:    "metric that tracks the latency of failed executing jobs",
 		Buckets: prometheus.DefBuckets,
 	}, []string{
 		"topic",
 	})
 )
 
-func init() {
-	http.Handle("/metrics", promhttp.Handler())
-}
+// func init() {
+// 	http.Handle("/metrics", promhttp.Handler())
+// }
 
 func main() {
+	setupPrometheus(2112)
 	flag.Parse()
-	_, err := setupPrometheus(2112)
-	if err != nil {
-		log.Fatal("Failed to listen on port :2112", err)
-	}
+	// _, err := setupPrometheus(2112)
+	// if err != nil {
+	// 	log.Fatal("Failed to listen on port :2112", err)
+	// }
+
+	// Create producer for retries
 	p, errP := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": *kafkaBroker})
-	// Check for errors
 	if errP != nil {
 		if ke, ok := errP.(kafka.Error); ok {
 			switch ec := ke.Code(); ec {
@@ -86,6 +100,7 @@ func main() {
 		}
 	}
 
+	// Produce messages to topic_retries
 	go func() {
 		for e := range p.Events() {
 			switch ev := e.(type) {
@@ -93,14 +108,14 @@ func main() {
 
 				if ev.TopicPartition.Error != nil {
 					//Prometheus
-					ErrorCounter.WithLabelValues(*ev.TopicPartition.Topic, "producer_retries_delivery").Inc()
+					message_counter_error.WithLabelValues(*ev.TopicPartition.Topic, "retries_topic_partition_error").Inc()
 					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
 						string(ev.Value),
 						string(*ev.TopicPartition.Topic),
 						ev.TopicPartition.Error)
 				} else {
 					//Prometheus
-					SuccessCounter.WithLabelValues(*ev.TopicPartition.Topic, "producer_retries_delivery").Inc()
+					message_counter_success.WithLabelValues(*ev.TopicPartition.Topic, "message_delivered_to_retries_topic").Inc()
 					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
 						string(ev.Value),
 						string(ev.Key),
@@ -110,11 +125,10 @@ func main() {
 					fmt.Println(ev.TopicPartition)
 				}
 			case kafka.Error:
-				ErrorCounter.WithLabelValues(*kafkaTopic, "producer_retries_delivery").Inc()
-				// It's an error
+				message_counter_error.WithLabelValues(*kafkaTopic, "producer_events_retries_kafka_error").Inc()
 				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
 			default:
-				ErrorCounter.WithLabelValues(*kafkaTopic, "producer_retries_delivery").Inc()
+				message_counter_error.WithLabelValues(*kafkaTopic, "producer_events_retries_default_error").Inc()
 				// It's not anything we were expecting
 				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
 
@@ -122,7 +136,7 @@ func main() {
 		}
 	}()
 
-	// Store the config
+	// Configure Consumer
 	cm := kafka.ConfigMap{
 		"bootstrap.servers":  *kafkaBroker,
 		"group.id":           *consumerGroup,
@@ -169,7 +183,6 @@ func main() {
 			fmt.Printf("Caught signal %v: terminating\n", sig)
 			run = false
 		default:
-
 			ev := c.Poll(3000)
 			if ev == nil {
 				// the Poll timed out and we got nothing'
@@ -192,18 +205,18 @@ func main() {
 					km.TopicPartition.Partition,
 					km.TopicPartition.Offset,
 					string(km.Key))
-				SuccessCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_message_received").Inc()
+				message_counter_success.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()
 				err := json.Unmarshal(km.Value, &cronJob)
 				if err != nil {
 					//Prometheus
-					ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal").Inc()
+					message_counter_error.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal_error").Inc()
 					fmt.Println(err)
 				}
 				out, err := execJob(cronJob.Command, cronJob.Args)
-				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
+				consumer_execution_latency.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 				if err != nil {
 					//Prometheus
-					ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_execution").Inc()
+					message_counter_error.WithLabelValues(*km.TopicPartition.Topic, "consumer_job_execution_error").Inc()
 					fmt.Println("😿 Error executing job", err)
 					fmt.Println(cronJob.Retries, "retries left")
 					if cronJob.Retries > 0 {
@@ -224,7 +237,7 @@ func main() {
 						err = p.Produce(&message, nil)
 						if err != nil {
 							//Prometheus
-							ErrorCounter.WithLabelValues(*km.TopicPartition.Topic, "produce_retries_produce_message").Inc()
+							message_counter_error.WithLabelValues(*km.TopicPartition.Topic, "retries_topic_Produce_message_error").Inc()
 							fmt.Printf("Failed to produce message: %s\n", err.Error())
 						}
 						fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
@@ -232,19 +245,21 @@ func main() {
 					} else {
 						fmt.Println("No retries left")
 					}
+					consumer_execution_latency_error.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 				}
-				SuccessCounter.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
+				message_counter_success.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
 				fmt.Println(string(out))
+				consumer_execution_latency_success.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 			case kafka.Error:
 				// It's an error
 				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
 				if e.Code() == kafka.ErrAllBrokersDown {
 					run = false
 				}
+				message_counter_error.WithLabelValues(*kafkaTopic, "consumer_kafka_error").Inc()
 			default:
 				// It's not anything we were expecting
 				fmt.Printf("Ignored event \n\t%v\n", ev)
-
 			}
 		}
 	}
@@ -266,11 +281,17 @@ func execJob(command string, args []string) ([]byte, error) {
 	return stdout, nil
 }
 
-func setupPrometheus(port int) (int, error) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return 0, err
-	}
-	go http.Serve(lis, nil)
-	return lis.Addr().(*net.TCPAddr).Port, nil
+//	func setupPrometheus(port int) (int, error) {
+//		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+//		if err != nil {
+//			return 0, err
+//		}
+//		go http.Serve(lis, nil)
+//		return lis.Addr().(*net.TCPAddr).Port, nil
+//	}
+func setupPrometheus(port int) {
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	}()
 }
