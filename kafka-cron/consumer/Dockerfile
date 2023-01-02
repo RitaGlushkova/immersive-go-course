@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine
+FROM --platform=linux/amd64 golang:1.19-alpine
 
 RUN apk add python3
 WORKDIR /app
