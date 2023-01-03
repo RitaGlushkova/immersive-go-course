@@ -3,7 +3,7 @@ groups:
     rules:
       - alert: JVMMemoryThresholdCrossed
         # Condition for alerting
-        expr: jvm_memory_committed_bytes{region="heap"}/jvm_memory_max_bytes{region="heap"} > 0.8
+        expr: jvm_memory_bytes_used{area="heap"}/jvm_memory_bytes_max{area="heap"} > 0.8
         # Annotation - additional informational labels to store more information
         annotations:
           title: "Instance  has crossed 80% heap memory usage"

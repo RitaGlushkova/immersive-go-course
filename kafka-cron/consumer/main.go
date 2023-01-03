@@ -94,7 +94,7 @@ func main() {
 		"bootstrap.servers":  *kafkaBroker,
 		"group.id":           *consumerGroup,
 		"session.timeout.ms": 6000,
-		"auto.offset.reset":  "earliest",
+		"auto.offset.reset":  "latest",
 		"enable.auto.commit": false,
 	}
 
@@ -148,7 +148,6 @@ func main() {
 
 			case *kafka.Message:
 				MessagesInFlight.WithLabelValues(*kafkaTopic).Inc()
-				defer MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
 				//Prometheus
 				start := time.Now()
 				// It's a message
@@ -168,6 +167,7 @@ func main() {
 					fmt.Println(err)
 				}
 				out, err := execJob(cronJob.Command, cronJob.Args)
+				MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
 				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 				if err != nil {
 					//Prometheus

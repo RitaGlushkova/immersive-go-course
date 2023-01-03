@@ -2,7 +2,7 @@ SHELL=/bin/bash
 .PHONY: run test develop
 
 up:  ## Start all or c=<name> containers in foreground
-	docker-compose -f docker-compose.yml up
+	docker-compose -f docker-compose.yml up $(c)
 start: ## Start all or c=<name> containers in background
 	docker-compose -f docker-compose.yml start $(c)
 down: ## Clean all data
