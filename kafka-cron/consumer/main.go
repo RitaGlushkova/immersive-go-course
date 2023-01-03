@@ -199,7 +199,7 @@ func main() {
 						time.Sleep(5 * time.Second)
 					} else {
 						fmt.Println("No retries left")
-						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic, "consumer_exceeded_retries").Inc()
+						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic).Inc()
 					}
 					LatencyExecutionError.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
 				}
