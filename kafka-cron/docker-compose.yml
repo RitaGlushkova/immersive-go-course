@@ -50,6 +50,8 @@ services:
     depends_on:
       kafka1:
         condition: service_healthy
+    ports:
+      - "2113:2112"
     volumes:
       - ./producer/cronfile.txt:/cronfile.txt
     build:
@@ -61,6 +63,8 @@ services:
     depends_on:
       kafka1:
         condition: service_healthy
+    ports:
+      - "2114:2112"
     build:
       context: .
       dockerfile: ./consumer/Dockerfile
@@ -79,6 +83,8 @@ services:
     depends_on:
       kafka1:
         condition: service_healthy
+    ports:
+      - "2115:2112"
     build:
       context: .
       dockerfile: ./consumer/Dockerfile
@@ -97,6 +103,8 @@ services:
     depends_on:
       kafka1:
         condition: service_healthy
+    ports:
+      - "2116:2112"
     build:
       context: .
       dockerfile: ./consumer/Dockerfile
