@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -12,9 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -32,67 +28,14 @@ const (
 )
 
 var (
-	consumerGroup        = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
-	kafkaTopic           = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
-	kafkaBroker          = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
-	CounterMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "message_counter_error",
-		Help: "metric that tracks the errors in the consumer or producer for retrying",
-	}, []string{
-		"topic", "error_type",
-	})
-	CounterMessagesSuccess = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "message_counter_success",
-		Help: "metric that tracks the success in the consumer or producer for retrying",
-	}, []string{
-		"topic", "job_type",
-	})
-	LatencyExecution = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "consumer_execution_latency",
-		Help:    "metric that tracks the latency of executing jobs",
-		Buckets: prometheus.DefBuckets,
-	}, []string{
-		"topic",
-	})
-	LatencyExecutionSuccess = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "consumer_execution_latency_success",
-		Help:    "metric that tracks the latency of successfully executing jobs",
-		Buckets: prometheus.DefBuckets,
-	}, []string{
-		"topic",
-	})
-	LatencyExecutionError = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "consumer_execution_latency_error",
-		Help:    "metric that tracks the latency of failed executing jobs",
-		Buckets: prometheus.DefBuckets,
-	}, []string{
-		"topic",
-	})
-	MessagesInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "messages_in_flight",
-		Help: "metric that tracks the number of messages in flight",
-	}, []string{
-		"topic",
-	})
-	CounterOfExceededRetries = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "counter_of_exceeded_retries",
-		Help: "metric that tracks the number of messages that exceeded the number of retries",
-	}, []string{
-		"topic",
-	})
+	consumerGroup = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
+	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
+	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
 )
-
-// func init() {
-// 	http.Handle("/metrics", promhttp.Handler())
-// }
 
 func main() {
 	setupPrometheus(2112)
 	flag.Parse()
-	// _, err := setupPrometheus(2112)
-	// if err != nil {
-	// 	log.Fatal("Failed to listen on port :2112", err)
-	// }
 
 	// Create producer for retries
 	p, errP := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": *kafkaBroker})
@@ -239,7 +182,7 @@ func main() {
 						if strings.Contains(*kafkaTopic, "-retries") {
 							topic = *kafkaTopic
 						} else {
-							topic = fmt.Sprintf("%v_retries", *kafkaTopic)
+							topic = fmt.Sprintf("%v-retries", *kafkaTopic)
 						}
 						message := kafka.Message{
 							TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
@@ -279,7 +222,6 @@ func main() {
 	}
 	fmt.Printf("👋 … and we're done. Closing the consumer and exiting.\n")
 
-	// Now we can exit
 	c.Close()
 }
 
@@ -293,19 +235,4 @@ func execJob(command string, args []string) ([]byte, error) {
 	}
 	fmt.Println("😻 Command Successfully Executed")
 	return stdout, nil
-}
-
-//	func setupPrometheus(port int) (int, error) {
-//		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-//		if err != nil {
-//			return 0, err
-//		}
-//		go http.Serve(lis, nil)
-//		return lis.Addr().(*net.TCPAddr).Port, nil
-//	}
-func setupPrometheus(port int) {
-	http.Handle("/metrics", promhttp.Handler())
-	go func() {
-		http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
-	}()
 }
