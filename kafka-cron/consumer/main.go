@@ -196,7 +196,7 @@ func main() {
 							fmt.Printf("Failed to produce message: %s\n", err.Error())
 						}
 						fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
-						time.Sleep(5 * time.Second)
+						//time.Sleep(5 * time.Second)
 					} else {
 						fmt.Println("No retries left")
 						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic).Inc()

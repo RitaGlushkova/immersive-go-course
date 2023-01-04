@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,6 +55,6 @@ var (
 func setupPrometheus(port int) {
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
 }
