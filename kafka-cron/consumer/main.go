@@ -15,11 +15,13 @@ import (
 )
 
 type cronjob struct {
-	Crontab string   `json:"crontab"`
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
-	Cluster string   `json:"cluster"`
-	Retries int      `json:"retries"`
+	Crontab            string      `json:"crontab"`
+	Command            string      `json:"command"`
+	Args               []string    `json:"args"`
+	Cluster            string      `json:"cluster"`
+	Retries            int         `json:"retries"`
+	TimestampProduced  time.Time   `json:"timestamp"`
+	TimestampAttempted []time.Time `json:"timestamp_attempted"`
 }
 
 const (
@@ -63,19 +65,10 @@ func main() {
 
 				if ev.TopicPartition.Error != nil {
 					CounterMessagesError.WithLabelValues(*ev.TopicPartition.Topic, "retries_topic_partition_error").Inc()
-					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
-						string(ev.Value),
-						string(*ev.TopicPartition.Topic),
-						ev.TopicPartition.Error)
+					PrintDeliveryFairure(ev)
 				} else {
 					CounterMessagesSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivered_to_retries_topic").Inc()
-					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
-						string(ev.Value),
-						string(ev.Key),
-						string(*ev.TopicPartition.Topic),
-						ev.TopicPartition.Partition,
-						ev.TopicPartition.Offset)
-					fmt.Println(ev.TopicPartition)
+					PrintDeliveryConfirmation(ev)
 				}
 			case kafka.Error:
 				CounterMessagesError.WithLabelValues(*kafkaTopic, "producer_events_retries_kafka_error").Inc()
@@ -147,81 +140,73 @@ func main() {
 			switch e := ev.(type) {
 
 			case *kafka.Message:
-				MessagesInFlight.WithLabelValues(*kafkaTopic).Inc()
-				//Prometheus
-				start := time.Now()
-				// It's a message
 				km := ev.(*kafka.Message)
-				cronJob := cronjob{}
-				fmt.Printf("💌 Message '%v' received from topic '%v' (partition %d at offset %d) key %v\n",
-					string(km.Value),
-					string(*km.TopicPartition.Topic),
-					km.TopicPartition.Partition,
-					km.TopicPartition.Offset,
-					string(km.Key))
-				CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()
-				err := json.Unmarshal(km.Value, &cronJob)
-				if err != nil {
-					//Prometheus
-					CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal_error").Inc()
-					fmt.Println(err)
+				cronJob := receiveMessage(km)
+				// Prometheus
+				if strings.Contains(*km.TopicPartition.Topic, "retries") {
+					LatencyAttemptedRetryToReception.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(cronJob.TimestampAttempted[len(cronJob.TimestampAttempted)-1]).Seconds())
+				} else {
+					LatencyProductionToReception.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(cronJob.TimestampProduced).Seconds())
 				}
+				startExec := time.Now()
 				out, err := execJob(cronJob.Command, cronJob.Args)
-				MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
-				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
+				// Prometheus
+				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				if err != nil {
 					//Prometheus
 					CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "consumer_job_execution_error").Inc()
 					fmt.Println("😿 Error executing job", err)
-					fmt.Println(cronJob.Retries, "retries left")
 					if cronJob.Retries > 0 {
-						cronJob.Retries = cronJob.Retries - 1
-						fmt.Println(cronJob.Retries, "Reties before sending to kafka")
-						recordValue, _ := json.Marshal(&cronJob)
-						var topic string
-						if strings.Contains(*kafkaTopic, "-retries") {
-							topic = *kafkaTopic
-						} else {
-							topic = fmt.Sprintf("%v-retries", *kafkaTopic)
-						}
-						message := kafka.Message{
-							TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-							Key:            []byte(km.Key),
-							Value:          []byte(recordValue),
-						}
-						err = p.Produce(&message, nil)
-						if err != nil {
-							//Prometheus
-							CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "retries_topic_Produce_message_error").Inc()
-							fmt.Printf("Failed to produce message: %s\n", err.Error())
-						}
-						fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
-						//time.Sleep(5 * time.Second)
+						go func() {
+							time.Sleep(1 * time.Second)
+							cronJob.Retries = cronJob.Retries - 1
+							fmt.Println(cronJob.Retries, "retries left")
+							cronJob.TimestampAttempted = append(cronJob.TimestampAttempted, time.Now())
+							recordValue, _ := json.Marshal(&cronJob)
+							retryTopic := createRetryTopic()
+							message := kafka.Message{
+								TopicPartition: kafka.TopicPartition{Topic: &retryTopic, Partition: kafka.PartitionAny},
+								Key:            []byte(km.Key),
+								Value:          []byte(recordValue),
+							}
+							err = p.Produce(&message, nil)
+							if err != nil {
+								//Prometheus
+								CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "retries_topic_Produce_message_error").Inc()
+								fmt.Printf("Failed to produce message: %s\n", err.Error())
+							}
+							fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
+						}()
 					} else {
 						fmt.Println("No retries left")
-						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic).Inc()
+						//Prometheus
+						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Inc()
 					}
-					LatencyExecutionError.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
+					//Prometheus
+					LatencyExecutionError.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				}
+				//Prometheus
 				CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
 				//Print successful output of the job
 				fmt.Println(string(out))
-				LatencyExecutionSuccess.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(start).Seconds())
+				//Prometheus
+				LatencyExecutionSuccess.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
 				if e.Code() == kafka.ErrAllBrokersDown {
 					run = false
 				}
+				//Prometheus
 				CounterMessagesError.WithLabelValues(*kafkaTopic, "consumer_kafka_error").Inc()
 			default:
 				// It's not anything we were expecting
 				fmt.Printf("Ignored event \n\t%v\n", ev)
+				//Prometheus
 				CounterMessagesError.WithLabelValues(*kafkaTopic, "consumer_ignored_event").Inc()
 			}
 		}
 	}
 	fmt.Printf("👋 … and we're done. Closing the consumer and exiting.\n")
-
 	c.Close()
 }
 
@@ -235,4 +220,31 @@ func execJob(command string, args []string) ([]byte, error) {
 	}
 	fmt.Println("😻 Command Successfully Executed")
 	return stdout, nil
+}
+
+func receiveMessage(km *kafka.Message) cronjob {
+	MessagesInFlight.WithLabelValues(*kafkaTopic).Inc()
+	defer MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
+	//Prometheus
+	cronJob := cronjob{}
+	PrintConfirmatonForReceivedMessage(km)
+	//Prometheus
+	CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()
+	err := json.Unmarshal(km.Value, &cronJob)
+	if err != nil {
+		//Prometheus
+		CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal_error").Inc()
+		fmt.Println(err)
+	}
+	return cronJob
+}
+
+func createRetryTopic() string {
+	var topic string
+	if strings.Contains(*kafkaTopic, "-retries") {
+		topic = *kafkaTopic
+	} else {
+		topic = fmt.Sprintf("%v-retries", *kafkaTopic)
+	}
+	return topic
 }

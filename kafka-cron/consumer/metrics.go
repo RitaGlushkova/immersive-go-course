@@ -22,29 +22,43 @@ var (
 	}, []string{
 		"topic", "job_type",
 	})
+	LatencyProductionToReception = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "message_latency_production_to_reception",
+		Help:    "metric that tracks the latency of producing messages to reception",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic",
+	})
+	LatencyAttemptedRetryToReception = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "message_latency_prodToRetry_to_reception",
+		Help:    "metric that tracks the latency of producing messages to retries",
+		Buckets: prometheus.DefBuckets,
+	}, []string{
+		"topic",
+	})
 	LatencyExecution = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "consumer_execution_latency",
 		Help:    "metric that tracks the latency of executing jobs",
 		Buckets: prometheus.DefBuckets,
 	}, []string{
-		"topic",
+		"topic", "command",
 	})
 	LatencyExecutionSuccess = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "consumer_execution_latency_success",
 		Help:    "metric that tracks the latency of successfully executing jobs",
 		Buckets: prometheus.DefBuckets,
 	}, []string{
-		"topic",
+		"topic", "command",
 	})
 	LatencyExecutionError = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "consumer_execution_latency_error",
 		Help:    "metric that tracks the latency of failed executing jobs",
 		Buckets: prometheus.DefBuckets,
 	}, []string{
-		"topic",
+		"topic", "command",
 	})
 	MessagesInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "messages_in_flight",
+		Name: "consumer_messages_in_flight",
 		Help: "metric that tracks the number of messages in flight",
 	}, []string{
 		"topic",
@@ -53,7 +67,7 @@ var (
 		Name: "counter_of_exceeded_retries",
 		Help: "metric that tracks the number of messages that exceeded the number of retries",
 	}, []string{
-		"topic",
+		"topic", "command",
 	})
 )
 

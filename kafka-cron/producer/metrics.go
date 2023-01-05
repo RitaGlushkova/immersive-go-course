@@ -24,6 +24,7 @@ var (
 	}, []string{
 		"topic", "job_type",
 	})
+	//Not sure about these two metrics
 	CronErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "cron_error_counter",
 		Help: "metric that counts errors in the cron",
@@ -36,6 +37,7 @@ var (
 	}, []string{
 		"cluster", "job_type",
 	})
+	///////////////////////////
 	LatencyMessageProduced = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "producer_message_latency_produced",
 		Help:    "metric that tracks the latency of producing messages",

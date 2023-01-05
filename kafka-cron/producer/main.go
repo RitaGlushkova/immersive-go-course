@@ -4,21 +4,22 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
-	"time"
-
+	"github.com/RitaGlushkova/kafka-cron/utils"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"os"
+	"time"
 )
 
 type cronjob struct {
-	Crontab string   `json:"crontab"`
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
-	Cluster string   `json:"cluster"`
-	Retries int      `json:"retries"`
+	Crontab   string    `json:"crontab"`
+	Command   string    `json:"command"`
+	Args      []string  `json:"args"`
+	Cluster   string    `json:"cluster"`
+	Retries   int       `json:"retries"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 var (
@@ -73,20 +74,11 @@ func main() {
 					//Prometheus
 					MessageCounterError.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_error").Inc()
 					//Print
-					fmt.Printf("Failed to send message '%v' to topic '%v'\n\tErr: %v",
-						string(ev.Value),
-						string(*ev.TopicPartition.Topic),
-						ev.TopicPartition.Error)
+					PrintDeliveryFairure(ev)
 				} else {
 					//Prometheus
 					MessageCounterSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_to_topic").Inc()
-					fmt.Printf("✅ Message '%v' with key '%v' delivered to topic '%v' (partition %d at offset %d)\n",
-						string(ev.Value),
-						string(ev.Key),
-						string(*ev.TopicPartition.Topic),
-						ev.TopicPartition.Partition,
-						ev.TopicPartition.Offset)
-					fmt.Println(ev.TopicPartition)
+					PrintDeliveryConfirmation(ev)
 				}
 			case *kafka.Error:
 				// It's an error
@@ -108,9 +100,17 @@ func main() {
 	}
 
 	for _, job := range cronjobs {
-		myJob := job
+		myJob := cronjob{
+			Crontab:   job.Crontab,
+			Command:   job.Command,
+			Args:      job.Args,
+			Cluster:   job.Cluster,
+			Retries:   job.Retries,
+			Timestamp: time.Now()}
 		_, cronErr := cron.AddFunc(job.Crontab, func() {
 			var message kafka.Message
+			//add timnestamp
+			myJob.Timestamp = time.Now()
 			if myJob.Cluster == "cluster-a" {
 				recordValue, _ := json.Marshal(&myJob)
 				message = kafka.Message{
@@ -128,7 +128,7 @@ func main() {
 				}
 			}
 			//Prometheus
-			start := time.Now()
+			startProduce := time.Now()
 			errStr := ""
 			err = p.Produce(&message, nil)
 			if err != nil {
@@ -137,7 +137,7 @@ func main() {
 				fmt.Printf("Failed to produce message: %s\n", err.Error())
 				errStr = err.Error()
 			}
-			LatencyMessageProduced.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(start).Seconds())
+			LatencyMessageProduced.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(startProduce).Seconds())
 			MessageCounterSuccess.WithLabelValues(*message.TopicPartition.Topic, "producing_message").Inc()
 		})
 		if cronErr != nil {
@@ -148,16 +148,12 @@ func main() {
 		CronSuccessCounter.WithLabelValues(myJob.Cluster, "cronjob_success").Inc()
 	}
 	cron.Run()
-	//time.Sleep(1 * time.Minute)
 	fmt.Printf("Flushing outstanding messages\n")
-	// Flush the Producer queue
 	t := 10000
 	if r := p.Flush(t); r > 0 {
 		fmt.Printf("\n--\n⚠️ Failed to flush all messages after %d milliseconds. %d message(s) remain\n", t, r)
 	} else {
 		fmt.Println("\n--\n✨ All messages flushed from the queue")
 	}
-
-	// Now we can exit
 	p.Close()
 }
