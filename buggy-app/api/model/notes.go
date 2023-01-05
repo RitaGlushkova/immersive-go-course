@@ -54,34 +54,42 @@ func GetNotesForOwner(ctx context.Context, conn dbConn, owner string) (Notes, er
 	if queryRows.Err() != nil {
 		return nil, fmt.Errorf("model: query read failed: %w", queryRows.Err())
 	}
-
+	fmt.Println(len(notes))
 	return notes, nil
 }
 
-func GetNoteById(ctx context.Context, conn dbConn, id string) (Note, error) {
-	var note Note
+func GetNoteById(ctx context.Context, conn dbConn, id, owner string) (Note, error) {
+	note := Note{}
 	if id == "" {
 		return note, errors.New("model: id not supplied")
 	}
 
 	row := conn.QueryRow(ctx, "SELECT id, owner, content, created, modified FROM public.note WHERE id = $1", id)
-
+	fmt.Println(row)
 	err := row.Scan(&note.Id, &note.Owner, &note.Content, &note.Created, &note.Modified)
 	if err != nil {
 		return note, fmt.Errorf("model: query scan failed: %w", err)
 	}
-	note.Tags = extractTags(note.Content)
-	return note, nil
+	if note.Owner == owner {
+		note.Tags = extractTags(note.Content)
+		return note, nil
+	} else {
+		//returns empty note if owner does not match
+		return Note{}, nil
+	}
 }
 
 // Extract tags from the note. We're looking for #something. There could be
 // multiple tags, so we FindAll.
 func extractTags(input string) []string {
-	re := regexp.MustCompile(`#([^#]+)`)
-	matches := re.FindAllStringSubmatch(input, -1)
-	tags := make([]string, 0, len(matches))
-	for _, f := range matches {
-		tags = append(tags, strings.TrimSpace(f[1]))
+	arrOfWords := strings.Split(input, " ")
+	tags := make([]string, 0, len(arrOfWords))
+	for _, word := range arrOfWords {
+		re := regexp.MustCompile(`#([^#]+)`)
+		matches := re.FindAllStringSubmatch(word, -1)
+		for _, f := range matches {
+			tags = append(tags, strings.TrimSpace(f[1]))
+		}
 	}
 	return tags
 }

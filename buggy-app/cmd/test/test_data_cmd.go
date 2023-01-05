@@ -6,8 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
+	"time"
 
 	"github.com/CodeYourFuture/immersive-go-course/buggy-app/util"
 	"github.com/jackc/pgx/v5"
@@ -44,10 +47,13 @@ type Flags struct {
 	// User flags
 	passwd string
 	status string
+	id     string
+	update bool
 
 	// Note flags
 	content string
 	owner   string
+	size    int
 }
 
 func usage() {
@@ -56,6 +62,8 @@ func usage() {
 }
 
 func main() {
+	//this should help rand.Intn to generate different values but it doesn't
+	rand.Seed(time.Now().UnixNano())
 	f := &Flags{}
 	if len(os.Args) < 2 {
 		log.Println("error: not enough arguments, expected one of: user, note")
@@ -139,11 +147,27 @@ func userFlags(f *Flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("user", flag.ExitOnError)
 	fs.StringVar(&f.passwd, "password", "password", "password of the created user")
 	fs.StringVar(&f.status, "status", "active", "status of the created user")
+	fs.StringVar(&f.id, "id", "", "id of the created user")
+	fs.BoolVar(&f.update, "update", false, "update the user password with the given id")
 	return fs
+}
+
+var charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func randomString(n int) string {
+	sb := strings.Builder{}
+	sb.Grow(n)
+	for i := 0; i < n; i++ {
+		sb.WriteByte(charset[rand.Intn(len(charset))])
+	}
+	return sb.String()
 }
 
 // Create a user from command-line configuration
 func userCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
+	if f.id == "" {
+		f.id = randomString(8)
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(f.passwd), 10)
 	if err != nil {
 		return fmt.Errorf("user: could not hash password, %w", err)
@@ -154,11 +178,21 @@ func userCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	}
 
 	var id string
-	err = conn.QueryRow(ctx, "INSERT INTO public.user (status, password) VALUES ($1, $2) RETURNING id", f.status, hash).Scan(&id)
-	if err != nil {
-		return fmt.Errorf("user: could not insert user, %w", err)
+
+	if f.update {
+		err := conn.QueryRow(ctx, "UPDATE public.user SET password = $1 WHERE id = $2 RETURNING id", hash, f.id).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("user: could not insert user, %w", err)
+		}
+		log.Printf("user updated\n")
+	} else {
+		err = conn.QueryRow(ctx, "INSERT INTO public.user (id, status, password) VALUES ($1, $2, $3) RETURNING id", f.id, f.status, hash).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("user: could not insert user, %w", err)
+		}
+		log.Printf("new user created\n")
 	}
-	log.Printf("new user created\n")
+
 	log.Printf("\tid: %s\n", id)
 	log.Printf("\tstatus: %s\n", f.status)
 	log.Printf("\tpassword: %s\n", f.passwd)
@@ -171,6 +205,8 @@ func noteFlags(f *Flags) *flag.FlagSet {
 	fs := flag.NewFlagSet("note", flag.ExitOnError)
 	fs.StringVar(&f.content, "content", "Example note content", "content of the created note")
 	fs.StringVar(&f.owner, "owner", "", "owner of the created note")
+	//can be used to generate a note with a large content
+	fs.IntVar(&f.size, "size", 1, "size of the created note")
 	return fs
 }
 
@@ -184,15 +220,27 @@ func noteCmd(ctx context.Context, f *Flags, conn *pgx.Conn) error {
 	if err != nil {
 		return fmt.Errorf("note: could not find owner, %w", err)
 	}
+	fmt.Println("about to make content")
 
+	// var builder strings.Builder
+	// builder.Grow(f.size * len(f.content))
+	// for i := 0; i < f.size; i++ {
+	// 	builder.WriteString(f.content)
+	// }
+	// var content = builder.String()
+
+	var content = strings.Repeat(f.content, f.size)
+	fmt.Println("CONTENT MADE")
 	var id string
-	err = conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", f.owner, f.content).Scan(&id)
+	fmt.Println("about to make query")
+	err = conn.QueryRow(ctx, "INSERT INTO public.note (owner, content) VALUES ($1, $2) RETURNING id", f.owner, content).Scan(&id)
+	fmt.Println("query made")
 	if err != nil {
 		return fmt.Errorf("note: could not insert note, %w", err)
 	}
 	log.Printf("new note created\n")
 	log.Printf("\tid: %s\n", id)
 	log.Printf("\towner: %s\n", f.owner)
-	log.Printf("\tcontent: %q\n", f.content)
+	log.Printf("\tcontent: %q\n", content)
 	return nil
 }
