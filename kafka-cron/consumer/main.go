@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"kafka-cron/utils"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
-
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
 type cronjob struct {
@@ -65,10 +65,10 @@ func main() {
 
 				if ev.TopicPartition.Error != nil {
 					CounterMessagesError.WithLabelValues(*ev.TopicPartition.Topic, "retries_topic_partition_error").Inc()
-					PrintDeliveryFairure(ev)
+					utils.PrintDeliveryFairure(ev)
 				} else {
 					CounterMessagesSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivered_to_retries_topic").Inc()
-					PrintDeliveryConfirmation(ev)
+					utils.PrintDeliveryConfirmation(ev)
 				}
 			case kafka.Error:
 				CounterMessagesError.WithLabelValues(*kafkaTopic, "producer_events_retries_kafka_error").Inc()
@@ -227,7 +227,7 @@ func receiveMessage(km *kafka.Message) cronjob {
 	defer MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
 	//Prometheus
 	cronJob := cronjob{}
-	PrintConfirmatonForReceivedMessage(km)
+	utils.PrintConfirmatonForReceivedMessage(km)
 	//Prometheus
 	CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()
 	err := json.Unmarshal(km.Value, &cronJob)

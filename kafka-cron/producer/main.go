@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/RitaGlushkova/kafka-cron/utils"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"kafka-cron/utils"
 	"os"
 	"time"
 )
@@ -74,11 +74,11 @@ func main() {
 					//Prometheus
 					MessageCounterError.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_error").Inc()
 					//Print
-					PrintDeliveryFairure(ev)
+					utils.PrintDeliveryFairure(ev)
 				} else {
 					//Prometheus
 					MessageCounterSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivery_to_topic").Inc()
-					PrintDeliveryConfirmation(ev)
+					utils.PrintDeliveryConfirmation(ev)
 				}
 			case *kafka.Error:
 				// It's an error
