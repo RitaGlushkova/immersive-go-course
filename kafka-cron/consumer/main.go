@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"kafka-cron/types"
 	"kafka-cron/utils"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -122,7 +120,7 @@ func main() {
 
 			case *kafka.Message:
 				km := ev.(*kafka.Message)
-				cronJob := receiveMessage(km)
+				cronJob := ReceiveMessage(km)
 				// Prometheus
 				if strings.Contains(*km.TopicPartition.Topic, "retries") {
 					LatencyAttemptedRetryToReception.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(cronJob.TimestampAttempted[len(cronJob.TimestampAttempted)-1]).Seconds())
@@ -130,7 +128,7 @@ func main() {
 					LatencyProductionToReception.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(cronJob.TimestampProduced).Seconds())
 				}
 				startExec := time.Now()
-				out, err := execJob(cronJob.Command, cronJob.Args)
+				out, err := ExecJob(cronJob.Command, cronJob.Args)
 				// Prometheus
 				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				if err != nil {
@@ -144,7 +142,7 @@ func main() {
 							fmt.Println(cronJob.Retries, "retries left")
 							cronJob.TimestampAttempted = append(cronJob.TimestampAttempted, time.Now())
 							recordValue, _ := json.Marshal(&cronJob)
-							retryTopic := createRetryTopic()
+							retryTopic := CreateRetryTopic()
 							message := kafka.Message{
 								TopicPartition: kafka.TopicPartition{Topic: &retryTopic, Partition: kafka.PartitionAny},
 								Key:            []byte(km.Key),
@@ -189,43 +187,4 @@ func main() {
 	}
 	fmt.Printf("👋 … and we're done. Closing the consumer and exiting.\n")
 	c.Close()
-}
-
-func execJob(command string, args []string) ([]byte, error) {
-	cmd := exec.Command(command, args...)
-	cmd.Stderr = os.Stderr
-	stdout, err := cmd.Output()
-	if err != nil {
-		fmt.Println(err.Error())
-		return nil, err
-	}
-	fmt.Println("😻 Command Successfully Executed")
-	return stdout, nil
-}
-
-func receiveMessage(km *kafka.Message) types.Cronjob {
-	MessagesInFlight.WithLabelValues(*kafkaTopic).Inc()
-	defer MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
-	//Prometheus
-	cronJob := types.Cronjob{}
-	utils.PrintConfirmatonForReceivedMessage(km)
-	//Prometheus
-	CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()
-	err := json.Unmarshal(km.Value, &cronJob)
-	if err != nil {
-		//Prometheus
-		CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "consumer_unmarshal_error").Inc()
-		fmt.Println(err)
-	}
-	return cronJob
-}
-
-func createRetryTopic() string {
-	var topic string
-	if strings.Contains(*kafkaTopic, "-retries") {
-		topic = *kafkaTopic
-	} else {
-		topic = fmt.Sprintf("%v-retries", *kafkaTopic)
-	}
-	return topic
 }
