@@ -163,13 +163,14 @@ func main() {
 					}
 					//Prometheus
 					LatencyExecutionError.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
+				} else {
+					//Prometheus
+					CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
+					//Print successful output of the job
+					fmt.Println(string(out))
+					//Prometheus
+					LatencyExecutionSuccess.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				}
-				//Prometheus
-				CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_success_job_executed").Inc()
-				//Print successful output of the job
-				fmt.Println(string(out))
-				//Prometheus
-				LatencyExecutionSuccess.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
 				if e.Code() == kafka.ErrAllBrokersDown {
