@@ -4,16 +4,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/google/shlex"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"kafka-cron/types"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/shlex"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-func ReadCrontabfile(path string) ([]cronjob, error) {
+func ReadCrontabfile(path string) ([]types.Cronjob, error) {
 	readFile, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %v", err)
@@ -25,7 +25,7 @@ func ReadCrontabfile(path string) ([]cronjob, error) {
 	for fileScanner.Scan() {
 		fileLines = append(fileLines, fileScanner.Text())
 	}
-	result := make([]cronjob, 0)
+	result := make([]types.Cronjob, 0)
 	for _, line := range fileLines {
 		val, err := shlex.Split(line)
 		if err != nil {
@@ -35,7 +35,7 @@ func ReadCrontabfile(path string) ([]cronjob, error) {
 		if err != nil {
 			return nil, fmt.Errorf("retries arg couldn't be converted to a number: %v", err)
 		}
-		cj := cronjob{
+		cj := types.Cronjob{
 			Crontab: strings.Join(val[0:6], " "),
 			Command: val[6],
 			Args:    val[7 : len(val)-2],

@@ -7,5 +7,7 @@ COPY go.sum ./
 RUN go mod download
 
 COPY ./producer ./
+COPY ./types ./types
+COPY ./utils ./utils
 RUN apk add build-base
 RUN go build -o /build -tags musl

@@ -4,23 +4,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"kafka-cron/types"
+	"kafka-cron/utils"
+	"os"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-	"kafka-cron/utils"
-	"os"
-	"time"
 )
-
-type cronjob struct {
-	Crontab   string    `json:"crontab"`
-	Command   string    `json:"command"`
-	Args      []string  `json:"args"`
-	Cluster   string    `json:"cluster"`
-	Retries   int       `json:"retries"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 var (
 	kafkaBroker = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
@@ -29,38 +22,21 @@ var (
 func main() {
 	setupPrometheus(2112)
 	flag.Parse()
-	topics := []string{"cluster-a-topic", "cluster-b-topic", "cluster-a-topic-retries", "cluster-b-topic-retries"}
-	partitions := []int{1, 2, 1, 1}
-	replicas := []int{1, 1, 1, 1}
-	// Store the config
-	c := kafka.ConfigMap{
-		"bootstrap.servers":   *kafkaBroker,
-		"delivery.timeout.ms": 10000,
-		"acks":                "all"}
+	topicConfig := types.TopicConfig{
+		TopicNames:        []string{"cluster-a-topic", "cluster-b-topic", "cluster-a-topic-retries", "cluster-b-topic-retries"},
+		TopicPartitions:   []int{1, 2, 1, 1},
+		TopicReplications: []int{1, 1, 1, 1},
+	}
 
 	// Create the producer
-	p, err := kafka.NewProducer(&c)
-
-	// Check for errors
+	p, err := utils.SetupProducer(*kafkaBroker)
 	if err != nil {
-		if ke, ok := err.(kafka.Error); ok {
-			switch ec := ke.Code(); ec {
-			case kafka.ErrInvalidArg:
-				fmt.Printf("Can't create the producer because you've configured it wrong (code: %d)!\n\t%v\n", ec, err)
-				os.Exit(1)
-			default:
-				fmt.Printf("Can't create the producer (code: %d)!\n\t%v\n", ec, err)
-				os.Exit(1)
-			}
-		} else {
-			fmt.Printf("There's a generic error creating the Producer! %v", err.Error())
-			os.Exit(1)
-		}
-
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Create topic
-	err = CreateTopic(p, topics, partitions, replicas)
+	err = CreateTopic(p, topicConfig.TopicNames, topicConfig.TopicPartitions, topicConfig.TopicReplications)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -100,21 +76,21 @@ func main() {
 	}
 
 	for _, job := range cronjobs {
-		myJob := cronjob{
-			Crontab:   job.Crontab,
-			Command:   job.Command,
-			Args:      job.Args,
-			Cluster:   job.Cluster,
-			Retries:   job.Retries,
-			Timestamp: time.Now()}
+		myJob := types.Cronjob{
+			Crontab:           job.Crontab,
+			Command:           job.Command,
+			Args:              job.Args,
+			Cluster:           job.Cluster,
+			Retries:           job.Retries,
+			TimestampProduced: time.Now()}
 		_, cronErr := cron.AddFunc(job.Crontab, func() {
 			var message kafka.Message
 			//add timnestamp
-			myJob.Timestamp = time.Now()
+			myJob.TimestampProduced = time.Now()
 			if myJob.Cluster == "cluster-a" {
 				recordValue, _ := json.Marshal(&myJob)
 				message = kafka.Message{
-					TopicPartition: kafka.TopicPartition{Topic: &topics[0], Partition: kafka.PartitionAny},
+					TopicPartition: kafka.TopicPartition{Topic: &topicConfig.TopicNames[0], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}
@@ -122,7 +98,7 @@ func main() {
 			if myJob.Cluster == "cluster-b" {
 				recordValue, _ := json.Marshal(&myJob)
 				message = kafka.Message{
-					TopicPartition: kafka.TopicPartition{Topic: &topics[1], Partition: kafka.PartitionAny},
+					TopicPartition: kafka.TopicPartition{Topic: &topicConfig.TopicNames[1], Partition: kafka.PartitionAny},
 					Key:            []byte(uuid.New().String()),
 					Value:          []byte(recordValue),
 				}

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"kafka-cron/types"
 	"kafka-cron/utils"
 	"os"
 	"os/exec"
@@ -12,17 +12,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
-)
 
-type cronjob struct {
-	Crontab            string      `json:"crontab"`
-	Command            string      `json:"command"`
-	Args               []string    `json:"args"`
-	Cluster            string      `json:"cluster"`
-	Retries            int         `json:"retries"`
-	TimestampProduced  time.Time   `json:"timestamp"`
-	TimestampAttempted []time.Time `json:"timestamp_attempted"`
-}
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+)
 
 const (
 	DefaultKafkaTopic    = "cluster-a-topic"
@@ -40,21 +32,10 @@ func main() {
 	flag.Parse()
 
 	// Create producer for retries
-	p, errP := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": *kafkaBroker})
-	if errP != nil {
-		if ke, ok := errP.(kafka.Error); ok {
-			switch ec := ke.Code(); ec {
-			case kafka.ErrInvalidArg:
-				fmt.Printf("Can't create the producer because you've configured it wrong (code: %d)!\n\t%v\n", ec, errP)
-				os.Exit(1)
-			default:
-				fmt.Printf("Can't create the producer (code: %d)!\n\t%v\n", ec, errP)
-				os.Exit(1)
-			}
-		} else {
-			fmt.Printf("There's a generic error creating the Producer! %v", errP.Error())
-			os.Exit(1)
-		}
+	p, err := utils.SetupProducer(*kafkaBroker)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Produce messages to topic_retries
@@ -222,11 +203,11 @@ func execJob(command string, args []string) ([]byte, error) {
 	return stdout, nil
 }
 
-func receiveMessage(km *kafka.Message) cronjob {
+func receiveMessage(km *kafka.Message) types.Cronjob {
 	MessagesInFlight.WithLabelValues(*kafkaTopic).Inc()
 	defer MessagesInFlight.WithLabelValues(*kafkaTopic).Dec()
 	//Prometheus
-	cronJob := cronjob{}
+	cronJob := types.Cronjob{}
 	utils.PrintConfirmatonForReceivedMessage(km)
 	//Prometheus
 	CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "consumer_message_received").Inc()

@@ -8,6 +8,8 @@ COPY go.sum ./
 RUN go mod download
 
 COPY ./consumer ./
+COPY ./types ./types
+COPY ./utils ./utils
 RUN apk add build-base
 RUN go build -o /build -tags musl
 
