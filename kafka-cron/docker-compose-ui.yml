@@ -1,0 +1,13 @@
+version: "2.1"
+
+services:
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    restart: "no"
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka1:29092"
+    depends_on:
+      kafka1:
+        condition: service_healthy

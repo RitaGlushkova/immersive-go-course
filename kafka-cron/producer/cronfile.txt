@@ -1,0 +1,3 @@
+*/20 * * * * * python3 -c "import os; print(os.getcwd())" cluster-a 2
+*/10 * * * * * echo hello success cluster-b 3
+*/60 * * * * * nc -vz host.docker.internal 9009 cluster-a 10
