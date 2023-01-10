@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober";
+option go_package = "github.com/RitaGlushkova/raft-otel/prober";
 
 package prober;
 
@@ -11,18 +11,23 @@ service Prober {
 
 // The request message 
 message ProbeRequest {
-  string endpoint = 1;
-  int64 number_of_requests_to_make = 2;
+  repeated Entry entries = 1;
+  int64 leaderId = 2;
+}
+message Entry {
+  string key = 1;
+  int64 value = 2;
 }
 
 // The response message containing the result
 message ProbeReply {
-  float average_latency_msecs = 1;
-  repeated Reply replies = 4;
+  int64 suggestedLeaderID = 1;
+  bool isLeader = 2;
+  string notLeaderMessage = 3;
+  repeated AcceptedEntry acceptedEntry = 4;
 }
 
-message Reply {
-  float latency_msecs = 1;
-  string error_message = 2;
-  int64 reply_code = 3;
+message AcceptedEntry {
+  string key = 1;
+  int64 value = 2;
 }

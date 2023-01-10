@@ -7,60 +7,39 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"time"
 
-	pb "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	pb "github.com/RitaGlushkova/raft-otel/prober"
 	"google.golang.org/grpc"
 )
 
 var (
-	port         = flag.Int("port", 50051, "The server port")
-	LatencyGauge = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "golang",
-			Name:      "latency_gauge",
-			Help:      "metric that tracks the latency",
-		}, []string{
-			"endpoint",
-		})
+	port     = flag.Int("port", 50051, "The server port")
+	leaderId = flag.Int64("leaderId", 1, "leader id")
 )
 
 type server struct {
 	pb.UnimplementedProberServer
 }
 
-func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeReply, error) {
-	var sumOfelapsedMsecs = float32(0)
-	numberOfRepeats := in.GetNumberOfRequestsToMake()
-	var replies = make([]*pb.Reply, 0)
-	for i := 0; i < int(numberOfRepeats); i++ {
-		var reply pb.Reply
-		start := time.Now()
-		res, err := http.Get(in.GetEndpoint())
-		if err != nil {
-			reply.ErrorMessage = fmt.Sprintf("Error: %v, request number %d", err, i)
-		} else {
-			reply.ReplyCode = int64(res.StatusCode)
-		}
-		elapsed := time.Since(start)
-		elapsedMsecs := float32(elapsed) / float32(time.Millisecond)
-		reply.LatencyMsecs = elapsedMsecs
-
-		LatencyGauge.WithLabelValues(in.GetEndpoint()).Set(float64(elapsedMsecs))
-		sumOfelapsedMsecs += elapsedMsecs
-		replies = append(replies, &reply)
-	}
-	averageLatencyMsecs := sumOfelapsedMsecs / float32(numberOfRepeats)
-	return &pb.ProbeReply{AverageLatencyMsecs: averageLatencyMsecs, Replies: replies}, nil
+type Entry struct {
+	Key   string
+	Value int64
 }
 
-func init() {
-	// Metrics have to be registered to be exposed:
-	//It only can be run once !!
-	prometheus.MustRegister(LatencyGauge)
-	http.Handle("/metrics", promhttp.Handler())
+func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeReply, error) {
+	clientAssumedByClient := in.GetLeaderId()
+	if clientAssumedByClient != *leaderId {
+		//return reply to client saying that you are not a leader
+	}
+
+	//if you are a leader, then do the job
+
+	var entries = make([]*pb.AcceptedEntry, 0)
+
+	for _, entry := range in.GetEntries() {
+		entries = append(entries, &pb.AcceptedEntry{Key: entry.Key, Value: entry.Value})
+	}
+	return &pb.ProbeReply{AcceptedEntry: entries}, nil
 }
 
 func setupPrometheus(port int) (int, error) {
