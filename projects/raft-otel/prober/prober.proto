@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option go_package = "github.com/RitaGlushkova/immersive-go-course/grpc-client-server/prober";
+
+package prober;
+
+// The prober service definition.
+service Prober {
+  rpc DoProbes (ProbeRequest) returns (ProbeReply) {}
+}
+
+// The request message 
+message ProbeRequest {
+  string endpoint = 1;
+  int64 number_of_requests_to_make = 2;
+}
+
+// The response message containing the result
+message ProbeReply {
+  float average_latency_msecs = 1;
+  repeated Reply replies = 4;
+}
+
+message Reply {
+  float latency_msecs = 1;
+  string error_message = 2;
+  int64 reply_code = 3;
+}
