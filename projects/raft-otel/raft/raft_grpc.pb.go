@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type RaftClient interface {
 	AppendEntry(ctx context.Context, in *RequestAppend, opts ...grpc.CallOption) (*ResultAppend, error)
 	RequestVote(ctx context.Context, in *CandidateRequest, opts ...grpc.CallOption) (*VoteResults, error)
+	UpdateCommit(ctx context.Context, in *RequestUpdate, opts ...grpc.CallOption) (*ResponseUpdate, error)
 }
 
 type raftClient struct {
@@ -52,12 +53,22 @@ func (c *raftClient) RequestVote(ctx context.Context, in *CandidateRequest, opts
 	return out, nil
 }
 
+func (c *raftClient) UpdateCommit(ctx context.Context, in *RequestUpdate, opts ...grpc.CallOption) (*ResponseUpdate, error) {
+	out := new(ResponseUpdate)
+	err := c.cc.Invoke(ctx, "/raft.Raft/UpdateCommit", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaftServer is the server API for Raft service.
 // All implementations must embed UnimplementedRaftServer
 // for forward compatibility
 type RaftServer interface {
 	AppendEntry(context.Context, *RequestAppend) (*ResultAppend, error)
 	RequestVote(context.Context, *CandidateRequest) (*VoteResults, error)
+	UpdateCommit(context.Context, *RequestUpdate) (*ResponseUpdate, error)
 	mustEmbedUnimplementedRaftServer()
 }
 
@@ -70,6 +81,9 @@ func (UnimplementedRaftServer) AppendEntry(context.Context, *RequestAppend) (*Re
 }
 func (UnimplementedRaftServer) RequestVote(context.Context, *CandidateRequest) (*VoteResults, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
+}
+func (UnimplementedRaftServer) UpdateCommit(context.Context, *RequestUpdate) (*ResponseUpdate, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateCommit not implemented")
 }
 func (UnimplementedRaftServer) mustEmbedUnimplementedRaftServer() {}
 
@@ -120,6 +134,24 @@ func _Raft_RequestVote_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Raft_UpdateCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestUpdate)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServer).UpdateCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/raft.Raft/UpdateCommit",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServer).UpdateCommit(ctx, req.(*RequestUpdate))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Raft_ServiceDesc is the grpc.ServiceDesc for Raft service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +166,10 @@ var Raft_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestVote",
 			Handler:    _Raft_RequestVote_Handler,
+		},
+		{
+			MethodName: "UpdateCommit",
+			Handler:    _Raft_UpdateCommit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
