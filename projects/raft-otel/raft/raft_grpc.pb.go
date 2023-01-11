@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RaftClient interface {
-	AppendEntries(ctx context.Context, in *RequestAppend, opts ...grpc.CallOption) (*ResultAppend, error)
+	AppendEntry(ctx context.Context, in *RequestAppend, opts ...grpc.CallOption) (*ResultAppend, error)
 	RequestVote(ctx context.Context, in *CandidateRequest, opts ...grpc.CallOption) (*VoteResults, error)
 }
 
@@ -34,9 +34,9 @@ func NewRaftClient(cc grpc.ClientConnInterface) RaftClient {
 	return &raftClient{cc}
 }
 
-func (c *raftClient) AppendEntries(ctx context.Context, in *RequestAppend, opts ...grpc.CallOption) (*ResultAppend, error) {
+func (c *raftClient) AppendEntry(ctx context.Context, in *RequestAppend, opts ...grpc.CallOption) (*ResultAppend, error) {
 	out := new(ResultAppend)
-	err := c.cc.Invoke(ctx, "/raft.Raft/AppendEntries", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/raft.Raft/AppendEntry", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (c *raftClient) RequestVote(ctx context.Context, in *CandidateRequest, opts
 // All implementations must embed UnimplementedRaftServer
 // for forward compatibility
 type RaftServer interface {
-	AppendEntries(context.Context, *RequestAppend) (*ResultAppend, error)
+	AppendEntry(context.Context, *RequestAppend) (*ResultAppend, error)
 	RequestVote(context.Context, *CandidateRequest) (*VoteResults, error)
 	mustEmbedUnimplementedRaftServer()
 }
@@ -65,8 +65,8 @@ type RaftServer interface {
 type UnimplementedRaftServer struct {
 }
 
-func (UnimplementedRaftServer) AppendEntries(context.Context, *RequestAppend) (*ResultAppend, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AppendEntries not implemented")
+func (UnimplementedRaftServer) AppendEntry(context.Context, *RequestAppend) (*ResultAppend, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendEntry not implemented")
 }
 func (UnimplementedRaftServer) RequestVote(context.Context, *CandidateRequest) (*VoteResults, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
@@ -84,20 +84,20 @@ func RegisterRaftServer(s grpc.ServiceRegistrar, srv RaftServer) {
 	s.RegisterService(&Raft_ServiceDesc, srv)
 }
 
-func _Raft_AppendEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Raft_AppendEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestAppend)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaftServer).AppendEntries(ctx, in)
+		return srv.(RaftServer).AppendEntry(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/raft.Raft/AppendEntries",
+		FullMethod: "/raft.Raft/AppendEntry",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftServer).AppendEntries(ctx, req.(*RequestAppend))
+		return srv.(RaftServer).AppendEntry(ctx, req.(*RequestAppend))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -128,8 +128,8 @@ var Raft_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*RaftServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "AppendEntries",
-			Handler:    _Raft_AppendEntries_Handler,
+			MethodName: "AppendEntry",
+			Handler:    _Raft_AppendEntry_Handler,
 		},
 		{
 			MethodName: "RequestVote",

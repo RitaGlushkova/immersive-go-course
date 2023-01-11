@@ -11,20 +11,21 @@ service Command {
 
 // The request message by client
 message CommandRequest {
-  repeated Entry entries = 1;
-  int64 leaderId = 2;
+  Entry entry = 1;
 }
+
 message Entry {
   string key = 1;
   int64 value = 2;
 }
 
-// The response message containing the result from server both leader and not
+// The response message containing the result from server both leader
 message CommandReply {
   int64 suggestedLeaderID = 1;
   bool isLeader = 2;
   string notLeaderMessage = 3;
-  repeated AcceptedEntry acceptedEntry = 4;
+  string successMessage = 4;
+  AcceptedEntry entry = 5;
 }
 
 message AcceptedEntry {
