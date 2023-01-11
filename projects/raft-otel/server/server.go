@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	pb "github.com/RitaGlushkova/raft-otel/prober"
+	cmd "github.com/RitaGlushkova/raft-otel/command"
 	"google.golang.org/grpc"
 )
 
@@ -18,15 +18,14 @@ var (
 )
 
 type server struct {
-	pb.UnimplementedProberServer
+	cmd.UnimplementedCommandServer
 }
-
 type Entry struct {
 	Key   string
 	Value int64
 }
 
-func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeReply, error) {
+func (s *server) Store(ctx context.Context, in *cmd.CommandRequest) (*cmd.CommandReply, error) {
 	clientAssumedByClient := in.GetLeaderId()
 	if clientAssumedByClient != *leaderId {
 		//return reply to client saying that you are not a leader
@@ -34,12 +33,12 @@ func (s *server) DoProbes(ctx context.Context, in *pb.ProbeRequest) (*pb.ProbeRe
 
 	//if you are a leader, then do the job
 
-	var entries = make([]*pb.AcceptedEntry, 0)
+	var entries = make([]*cmd.AcceptedEntry, 0)
 
 	for _, entry := range in.GetEntries() {
-		entries = append(entries, &pb.AcceptedEntry{Key: entry.Key, Value: entry.Value})
+		entries = append(entries, &cmd.AcceptedEntry{Key: entry.Key, Value: entry.Value})
 	}
-	return &pb.ProbeReply{AcceptedEntry: entries}, nil
+	return &cmd.CommandReply{AcceptedEntry: entries}, nil
 }
 
 func setupPrometheus(port int) (int, error) {
@@ -62,7 +61,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterProberServer(s, &server{})
+	cmd.RegisterCommandServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

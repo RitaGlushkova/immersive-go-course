@@ -1,16 +1,16 @@
 syntax = "proto3";
 
-option go_package = "github.com/RitaGlushkova/raft-otel/prober";
+option go_package = "github.com/RitaGlushkova/raft-otel/command";
 
-package prober;
+package command;
 
 // The prober service definition.
-service Prober {
-  rpc DoProbes (ProbeRequest) returns (ProbeReply) {}
+service Command {
+  rpc Store (CommandRequest) returns (CommandReply) {}
 }
 
 // The request message 
-message ProbeRequest {
+message CommandRequest {
   repeated Entry entries = 1;
   int64 leaderId = 2;
 }
@@ -20,7 +20,7 @@ message Entry {
 }
 
 // The response message containing the result
-message ProbeReply {
+message CommandReply {
   int64 suggestedLeaderID = 1;
   bool isLeader = 2;
   string notLeaderMessage = 3;

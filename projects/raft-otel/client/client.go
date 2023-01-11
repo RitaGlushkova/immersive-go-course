@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/RitaGlushkova/raft-otel/prober"
+	cmd "github.com/RitaGlushkova/raft-otel/command"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -28,21 +28,21 @@ func main() {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewProberClient(conn)
+	c := cmd.NewCommandClient(conn)
 
 	// Contact the server and print out its response.
-	_, err = ProbeLog(c, &pb.ProbeRequest{Entries: []*pb.Entry{{Key: *key, Value: *value}}, LeaderId: *leaderId})
+	_, err = ProbeLog(c, &cmd.CommandRequest{Entries: []*cmd.Entry{{Key: *key, Value: *value}}, LeaderId: *leaderId})
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func ProbeLog(c pb.ProberClient, req *pb.ProbeRequest) (*pb.ProbeReply, error) {
+func ProbeLog(c cmd.CommandClient, req *cmd.CommandRequest) (*cmd.CommandReply, error) {
 	duration := 3 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	resp, err := c.DoProbes(ctx, req)
+	resp, err := c.Store(ctx, req)
 	if err != nil {
 		return nil, status.Errorf(13, "could not probe: %v", err)
 	}
