@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option go_package = "github.com/RitaGlushkova/raft-otel/raft";
+
+package raft;
+
+// The methods in Raft consensus.
+service Raft {
+  rpc AppendEntries (RequestAppend) returns (ResultAppend) {}
+  rpc RequestVote (CandidateRequest) returns (VoteResults) {}
+}
+
+// The request message from a candidate
+message CandidateRequest {
+  int64 term = 1;
+  int64 candidateId = 2;
+  int64 lastLogIndex = 3;
+  int64 lastLogTerm = 4;
+}
+
+// Candidate received vote results
+message VoteResults {
+    int64 term = 1;
+    bool voteGranted = 2;
+}
+
+//Request to Append Entries from leader to followers
+message RequestAppend {
+    int64 term = 1;
+    int64 leaderId = 2;
+    int64 prevLogIndex = 3;
+    repeated Entry entries = 4;
+    int64 leaderCommit = 5;
+}
+
+//Result of trying to Append Entries from leader to followers
+message ResultAppend {
+    int64 term = 1;
+    bool succeeds = 2;
+}
+
+// Entry from Client
+message Entry {
+    string key = 1;
+    int64 value = 2;
+}
+

@@ -31,21 +31,21 @@ func main() {
 	c := cmd.NewCommandClient(conn)
 
 	// Contact the server and print out its response.
-	_, err = ProbeLog(c, &cmd.CommandRequest{Entries: []*cmd.Entry{{Key: *key, Value: *value}}, LeaderId: *leaderId})
+	resp, err := SendValue(c, &cmd.CommandRequest{Entries: []*cmd.Entry{{Key: *key, Value: *value}}, LeaderId: *leaderId})
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("Response: %v", resp)
 }
 
-func ProbeLog(c cmd.CommandClient, req *cmd.CommandRequest) (*cmd.CommandReply, error) {
+func SendValue(c cmd.CommandClient, req *cmd.CommandRequest) (*cmd.CommandReply, error) {
 	duration := 3 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
 	resp, err := c.Store(ctx, req)
 	if err != nil {
-		return nil, status.Errorf(13, "could not probe: %v", err)
+		return nil, status.Errorf(13, "could not store value: %v", err)
 	}
-	//log.Printf("Average Latency for %d request(s) is %v milliseconds. %v", *numberOfReq, resp.GetAverageLatencyMsecs(), resp.Replies)
 	return resp, nil
 }

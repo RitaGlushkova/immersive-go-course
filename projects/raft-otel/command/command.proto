@@ -4,12 +4,12 @@ option go_package = "github.com/RitaGlushkova/raft-otel/command";
 
 package command;
 
-// The prober service definition.
+// The command sent by client to a leading server.
 service Command {
   rpc Store (CommandRequest) returns (CommandReply) {}
 }
 
-// The request message 
+// The request message by client
 message CommandRequest {
   repeated Entry entries = 1;
   int64 leaderId = 2;
@@ -19,7 +19,7 @@ message Entry {
   int64 value = 2;
 }
 
-// The response message containing the result
+// The response message containing the result from server both leader and not
 message CommandReply {
   int64 suggestedLeaderID = 1;
   bool isLeader = 2;
