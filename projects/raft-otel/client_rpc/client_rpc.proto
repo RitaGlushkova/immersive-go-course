@@ -1,16 +1,16 @@
 syntax = "proto3";
 
-option go_package = "github.com/RitaGlushkova/raft-otel/command";
+option go_package = "github.com/RitaGlushkova/raft-otel/client_rpc";
 
-package command;
+package client_rpc;
 
 // The command sent by client to a leading server.
 service Command {
-  rpc Store (CommandRequest) returns (CommandReply) {}
+  rpc Store (Request) returns (Reply) {}
 }
 
 // The request message by client
-message CommandRequest {
+message Request {
   Entry entry = 1;
 }
 
@@ -20,7 +20,7 @@ message Entry {
 }
 
 // The response message containing the result from server both leader
-message CommandReply {
+message Reply {
   int64 suggestedLeaderID = 1;
   bool isLeader = 2;
   string notLeaderMessage = 3;

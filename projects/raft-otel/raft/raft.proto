@@ -8,7 +8,6 @@ package raft;
 service Raft {
   rpc AppendEntry (RequestAppend) returns (ResultAppend) {}
   rpc RequestVote (CandidateRequest) returns (VoteResults) {}
-  rpc UpdateCommit (RequestUpdate) returns (ResponseUpdate) {}
 }
 
 // The request message from a candidate
@@ -30,29 +29,21 @@ message RequestAppend {
     int64 term = 1;
     int64 leaderId = 2;
     int64 prevLogIndex = 3;
-    Entry entry = 4;
-    int64 leaderCommit = 5;
+    int64 prevLogTerm = 4;
+    Entry entry = 5;
+    int64 leaderCommit = 6;
 }
 
 //Result of trying to Append Entries from leader to followers
 message ResultAppend {
     int64 term = 1;
     bool succeeds = 2;
-    Entry entry = 3;
 }
 
 // Entry from Client
 message Entry {
     string key = 1;
     int64 value = 2;
+    int64 term = 3;
 }
 
-message RequestUpdate {
-    int64 leaderCommit = 1;
-    int64 term = 2;
-    int64 leaderId = 3;
-}
-
-message ResponseUpdate {
-    bool succeeds = 1;
-}

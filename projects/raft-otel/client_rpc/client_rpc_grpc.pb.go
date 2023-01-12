@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.21.9
-// source: command/command.proto
+// source: client_rpc/client_rpc.proto
 
-package command
+package client_rpc
 
 import (
 	context "context"
@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CommandClient interface {
-	Store(ctx context.Context, in *CommandRequest, opts ...grpc.CallOption) (*CommandReply, error)
+	Store(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Reply, error)
 }
 
 type commandClient struct {
@@ -33,9 +33,9 @@ func NewCommandClient(cc grpc.ClientConnInterface) CommandClient {
 	return &commandClient{cc}
 }
 
-func (c *commandClient) Store(ctx context.Context, in *CommandRequest, opts ...grpc.CallOption) (*CommandReply, error) {
-	out := new(CommandReply)
-	err := c.cc.Invoke(ctx, "/command.Command/Store", in, out, opts...)
+func (c *commandClient) Store(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Reply, error) {
+	out := new(Reply)
+	err := c.cc.Invoke(ctx, "/client_rpc.Command/Store", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (c *commandClient) Store(ctx context.Context, in *CommandRequest, opts ...g
 // All implementations must embed UnimplementedCommandServer
 // for forward compatibility
 type CommandServer interface {
-	Store(context.Context, *CommandRequest) (*CommandReply, error)
+	Store(context.Context, *Request) (*Reply, error)
 	mustEmbedUnimplementedCommandServer()
 }
 
@@ -54,7 +54,7 @@ type CommandServer interface {
 type UnimplementedCommandServer struct {
 }
 
-func (UnimplementedCommandServer) Store(context.Context, *CommandRequest) (*CommandReply, error) {
+func (UnimplementedCommandServer) Store(context.Context, *Request) (*Reply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Store not implemented")
 }
 func (UnimplementedCommandServer) mustEmbedUnimplementedCommandServer() {}
@@ -71,7 +71,7 @@ func RegisterCommandServer(s grpc.ServiceRegistrar, srv CommandServer) {
 }
 
 func _Command_Store_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CommandRequest)
+	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -80,10 +80,10 @@ func _Command_Store_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/command.Command/Store",
+		FullMethod: "/client_rpc.Command/Store",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CommandServer).Store(ctx, req.(*CommandRequest))
+		return srv.(CommandServer).Store(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -92,7 +92,7 @@ func _Command_Store_Handler(srv interface{}, ctx context.Context, dec func(inter
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Command_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "command.Command",
+	ServiceName: "client_rpc.Command",
 	HandlerType: (*CommandServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -101,5 +101,5 @@ var Command_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "command/command.proto",
+	Metadata: "client_rpc/client_rpc.proto",
 }
