@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +34,7 @@ type Entry struct {
 type RaftServer struct {
 	cmd.UnimplementedCommandServer
 	rt.UnimplementedRaftServer
-
+	state    string
 	leaderId int64
 	//PersistentState
 	currentTerm int64
@@ -41,9 +43,9 @@ type RaftServer struct {
 	// VolatileState
 	commitIndex int64
 	lastApplied int64
-
+	peerPorts   []int64
 	// VolatileStateLeader
-	//nextIndex  []int64
+	nextIndex []int64
 	//matchIndex []int64
 }
 
@@ -56,26 +58,23 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 	fmt.Println("ENTRY FROM THE CLIENT", clientEntry)
 	//Append to its log first
 	s.log = append(s.log, Entry{Key: clientEntry.Key, Value: clientEntry.Value, Term: s.currentTerm})
-	//Update lastApplied
 	s.lastApplied = int64(len(s.log) - 1)
-
+	fmt.Println("last applied on the leader", s.lastApplied)
 	//Act as a client to other servers
-	addresses := strings.Split(*peerPorts, ",")
 	successCounter := 0
-	respChan := make(chan *rt.ResultAppend, len(addresses))
+	respChan := make(chan *rt.ResultAppend, len(s.peerPorts))
 	//respLogs := make(chan string, len(addresses))
-	for _, addr := range addresses {
+	for _, port := range s.peerPorts {
 		// Set up a connection to the servers in module.
-		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", addr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			fmt.Printf("couldn't connect to a peer with address %v, %v", addr, err)
+			fmt.Printf("couldn't connect to a peer with address %v, %v", port, err)
 		}
 		defer conn.Close()
 		raft := rt.NewRaftClient(conn)
-
 		go func() {
 			for {
-				resp, err := TalkToPeers(raft, &rt.RequestAppend{Entry: &rt.Entry{Key: clientEntry.Key, Value: clientEntry.Value, Term: s.currentTerm}, LeaderId: *leaderId, PrevLogIndex: s.lastApplied, PrevLogTerm: s.log[s.lastApplied].Term, LeaderCommit: s.commitIndex, Term: s.currentTerm})
+				resp, err := TalkToPeers(raft, &rt.RequestAppend{Entry: &rt.Entry{Key: clientEntry.Key, Value: clientEntry.Value}, LeaderId: *leaderId, PrevLogIndex: s.lastApplied - 1, PrevLogTerm: s.log[s.lastApplied-1].Term, LeaderCommit: s.commitIndex, Term: s.currentTerm})
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -86,15 +85,15 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 			}
 		}()
 	}
-	for i := 0; i < len(addresses); i++ {
+	for i := 0; i < len(s.peerPorts); i++ {
 		resp := <-respChan
 		if resp.Succeeds {
 			successCounter++
 		}
-		if successCounter == len(addresses)/2 {
+		if successCounter == len(s.peerPorts)/2 {
 			//+1 is yourself
 			s.commitIndex = s.lastApplied
-			//send heartbeat in go routine
+			//send heartbeat in go routine -> TODO
 			fmt.Println("COMMIT INDEX", s.commitIndex)
 			fmt.Println("Last commited value", s.log[s.commitIndex].Value, "with key", s.log[s.commitIndex].Key)
 			return &cmd.Reply{SuccessMessage: "Value stored", IsLeader: true}, nil
@@ -120,33 +119,26 @@ func TalkToPeers(raft rt.RaftClient, req *rt.RequestAppend) (*rt.ResultAppend, e
 //func SendAHeartbeat
 
 func (s *RaftServer) AppendEntry(ctx context.Context, in *rt.RequestAppend) (*rt.ResultAppend, error) {
-	//append to log
+	//check leader's term
+	if in.Term < s.currentTerm {
+		return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("i don't think you are a leader")
+	}
+	//check if log is consistent
+	fmt.Println(s.log, in.PrevLogTerm, "Printing indexes")
+	if s.log[in.PrevLogIndex].Term != in.PrevLogTerm {
+		return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("log is not consistent")
+	}
 	if in.Entry != nil {
-		//check leader's term
-		if in.Entry.Term < s.currentTerm {
-			return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("i don't think you are a leader")
-		}
-		//check if log is consistent
-		// if s.lastApplied != in.PrevLogIndex || s.log[s.lastApplied].Term != in.PrevLogTerm {
-		// 	return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("log is not consistent")
-		// }
 		s.log = append(s.log, Entry{Key: in.Entry.Key, Value: in.Entry.Value, Term: s.currentTerm})
 		fmt.Println("I am a follower, I have appended to my log", in.Entry.Key, in.Entry.Value, "with term", s.currentTerm, "my logs are", s.log)
 		return &rt.ResultAppend{Succeeds: true, Term: s.currentTerm}, nil
 	}
-	// heartbeat
-	if in.Term < s.currentTerm {
-		return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("i don't think you are a leader")
-	}
 	//is current term is less or equal to leader's term
 	s.currentTerm = in.Term
-	if s.lastApplied != in.PrevLogIndex || s.log[s.lastApplied].Term != in.PrevLogTerm {
-		return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("log is not consistent")
-	}
 	//Update lastApplied
 	if s.commitIndex < in.LeaderCommit {
-		s.commitIndex = in.LeaderCommit
 		s.lastApplied = int64(len(s.log) - 1)
+		s.commitIndex = int64(math.Min(float64(in.LeaderCommit), float64(len(s.log))))
 	}
 	return &rt.ResultAppend{Succeeds: true, Term: s.currentTerm}, nil
 }
@@ -163,7 +155,28 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	server := &RaftServer{leaderId: *leaderId, currentTerm: 0, commitIndex: 0, lastApplied: 0}
+	server := &RaftServer{leaderId: *leaderId, currentTerm: 0, commitIndex: 0, lastApplied: 0, log: []Entry{{Key: "0", Value: 0, Term: 0}}} //log[0] is dummy
+	addresses := strings.Split(*peerPorts, ",")
+	for _, addr := range addresses {
+		port, _ := strconv.Atoi(addr)
+		server.peerPorts = append(server.peerPorts, int64(port))
+		//server.nextIndex = append(server.nextIndex, 1)
+	}
+	// go func() {
+	// 	for {
+	// 		if *portR == *leaderId {
+	// 			for i := 0; i < len(addresses); i++ {
+	// 				fmt.Println("Checking my indexLog[]", server.nextIndex)
+	// 				server.nextIndex[i] = int64(len(server.log))
+	// 			}
+	// 		} else {
+	// 			server.state = "follower"
+	// 		}
+	// 		time.Sleep(3 * time.Second)
+	// 	}
+	// }()
+
+	//temporary
 	server.leaderId = *leaderId
 	fmt.Println("I just started. I think leader is ", server.leaderId, "my current logs: ", server.log, "my current term: ", server.currentTerm)
 	//server for raft
