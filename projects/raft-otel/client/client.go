@@ -32,15 +32,15 @@ func main() {
 		}
 		defer conn.Close()
 		c := cmd.NewCommandClient(conn)
-		fmt.Println("CONNECTED")
+		fmt.Println("CONNECTED to ", addresses[i])
 		// Contact the server and print out its response.
 		resp, err := SendValue(c, &cmd.Request{Entry: &cmd.Entry{Key: *key, Value: *value}})
 		if err != nil {
-			fmt.Println("ERROR")
+			fmt.Println("ERROR SENDING VALUE")
 			log.Fatal(err)
 		}
 		if resp.IsLeader {
-			log.Printf("Response: %v", resp)
+			log.Printf("Response from server: %v", resp)
 			break
 		}
 	}
@@ -52,7 +52,6 @@ func SendValue(c cmd.CommandClient, req *cmd.Request) (*cmd.Reply, error) {
 	defer cancel()
 
 	resp, err := c.Store(ctx, req)
-	fmt.Println("RESPONSE", resp, err)
 	if err != nil {
 		return nil, err
 	}

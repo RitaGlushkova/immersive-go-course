@@ -63,6 +63,7 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 	addresses := strings.Split(*peerPorts, ",")
 	successCounter := 0
 	respChan := make(chan *rt.ResultAppend, len(addresses))
+	//respLogs := make(chan string, len(addresses))
 	for _, addr := range addresses {
 		// Set up a connection to the servers in module.
 		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", addr), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -74,9 +75,9 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 
 		go func() {
 			for {
-				resp, err := TellPeerToAppend(raft, &rt.RequestAppend{Entry: &rt.Entry{Key: clientEntry.Key, Value: clientEntry.Value, Term: s.currentTerm}, LeaderId: *leaderId, PrevLogIndex: s.lastApplied, PrevLogTerm: s.log[s.lastApplied].Term, LeaderCommit: s.commitIndex, Term: s.currentTerm})
+				resp, err := TalkToPeers(raft, &rt.RequestAppend{Entry: &rt.Entry{Key: clientEntry.Key, Value: clientEntry.Value, Term: s.currentTerm}, LeaderId: *leaderId, PrevLogIndex: s.lastApplied, PrevLogTerm: s.log[s.lastApplied].Term, LeaderCommit: s.commitIndex, Term: s.currentTerm})
 				if err != nil {
-					fmt.Println("HERE IS AN ERROR", err)
+					fmt.Println(err)
 				}
 				if resp.Succeeds {
 					respChan <- resp
@@ -94,6 +95,8 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 			//+1 is yourself
 			s.commitIndex = s.lastApplied
 			//send heartbeat in go routine
+			fmt.Println("COMMIT INDEX", s.commitIndex)
+			fmt.Println("Last commited value", s.log[s.commitIndex].Value, "with key", s.log[s.commitIndex].Key)
 			return &cmd.Reply{SuccessMessage: "Value stored", IsLeader: true}, nil
 		}
 	}
@@ -102,15 +105,15 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 }
 
 // AppendValue requests to appends a value to the raft log.
-func TellPeerToAppend(raft rt.RaftClient, req *rt.RequestAppend) (*rt.ResultAppend, error) {
+func TalkToPeers(raft rt.RaftClient, req *rt.RequestAppend) (*rt.ResultAppend, error) {
 	duration := 3 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-
 	resp, err := raft.AppendEntry(ctx, req)
 	if err != nil {
 		return resp, err
 	}
+	fmt.Println("I think I am a leader", req.LeaderId, "my current term: ", req.Term)
 	return resp, nil
 }
 
@@ -128,6 +131,7 @@ func (s *RaftServer) AppendEntry(ctx context.Context, in *rt.RequestAppend) (*rt
 		// 	return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("log is not consistent")
 		// }
 		s.log = append(s.log, Entry{Key: in.Entry.Key, Value: in.Entry.Value, Term: s.currentTerm})
+		fmt.Println("I am a follower, I have appended to my log", in.Entry.Key, in.Entry.Value, "with term", s.currentTerm, "my logs are", s.log)
 		return &rt.ResultAppend{Succeeds: true, Term: s.currentTerm}, nil
 	}
 	// heartbeat
@@ -137,7 +141,6 @@ func (s *RaftServer) AppendEntry(ctx context.Context, in *rt.RequestAppend) (*rt
 	//is current term is less or equal to leader's term
 	s.currentTerm = in.Term
 	if s.lastApplied != in.PrevLogIndex || s.log[s.lastApplied].Term != in.PrevLogTerm {
-		fmt.Println("log is not consistent")
 		return &rt.ResultAppend{Succeeds: false, Term: s.currentTerm}, fmt.Errorf("log is not consistent")
 	}
 	//Update lastApplied
@@ -161,6 +164,8 @@ func main() {
 	}
 
 	server := &RaftServer{leaderId: *leaderId, currentTerm: 0, commitIndex: 0, lastApplied: 0}
+	server.leaderId = *leaderId
+	fmt.Println("I just started. I think leader is ", server.leaderId, "my current logs: ", server.log, "my current term: ", server.currentTerm)
 	//server for raft
 	serverForRaft := grpc.NewServer()
 	rt.RegisterRaftServer(serverForRaft, server)
@@ -170,15 +175,12 @@ func main() {
 			log.Fatalf("failed to serve: %v", err)
 		}
 	}()
-
 	//server for client
 	serverForClient := grpc.NewServer()
 	cmd.RegisterCommandServer(serverForClient, server)
-
 	log.Printf("server listening at %v", lisClient.Addr())
 	if err := serverForClient.Serve(lisClient); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 
-	server.leaderId = *leaderId
 }
