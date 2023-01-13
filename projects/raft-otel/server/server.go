@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ type RaftServer struct {
 	rt.UnimplementedRaftServer
 	state    string
 	leaderId int64
+	myId     int64
 	//PersistentState
 	currentTerm int64
 	//votedFor    int64
@@ -49,6 +51,17 @@ type RaftServer struct {
 	//matchIndex []int64
 }
 
+func NewServer(peerPorts []int64) *RaftServer {
+	s := new(RaftServer)
+	s.state = "follower"
+	s.myId = *portR
+	s.peerPorts = peerPorts
+	s.currentTerm = 0
+	s.commitIndex = 0
+	s.lastApplied = 0
+	return s
+}
+
 func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, error) {
 	if *portR != s.leaderId {
 		fmt.Printf("I am not a leader, i think the leaders id is %v", s.leaderId)
@@ -58,7 +71,7 @@ func (s *RaftServer) Store(ctx context.Context, in *cmd.Request) (*cmd.Reply, er
 	fmt.Println("ENTRY FROM THE CLIENT", clientEntry)
 	//Append to its log first
 	s.log = append(s.log, Entry{Key: clientEntry.Key, Value: clientEntry.Value, Term: s.currentTerm})
-	s.lastApplied = int64(len(s.log) - 1)
+	s.lastApplied = int64(len(s.log))
 	fmt.Println("last applied on the leader", s.lastApplied)
 	//Act as a client to other servers
 	successCounter := 0
@@ -154,14 +167,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-
-	server := &RaftServer{leaderId: *leaderId, currentTerm: 0, commitIndex: 0, lastApplied: 0, log: []Entry{{Key: "0", Value: 0, Term: 0}}} //log[0] is dummy
+	var ports []int64
 	addresses := strings.Split(*peerPorts, ",")
 	for _, addr := range addresses {
 		port, _ := strconv.Atoi(addr)
-		server.peerPorts = append(server.peerPorts, int64(port))
-		//server.nextIndex = append(server.nextIndex, 1)
+		ports = append(ports, int64(port))
 	}
+	server := NewServer(ports)
+
 	// go func() {
 	// 	for {
 	// 		if *portR == *leaderId {
@@ -176,9 +189,6 @@ func main() {
 	// 	}
 	// }()
 
-	//temporary
-	server.leaderId = *leaderId
-	fmt.Println("I just started. I think leader is ", server.leaderId, "my current logs: ", server.log, "my current term: ", server.currentTerm)
 	//server for raft
 	serverForRaft := grpc.NewServer()
 	rt.RegisterRaftServer(serverForRaft, server)
@@ -196,4 +206,19 @@ func main() {
 		log.Fatalf("failed to serve: %v", err)
 	}
 
+}
+
+func electionTimeout() time.Duration {
+	return time.Duration(rand.Intn(150)+150) * time.Millisecond
+}
+
+func SendVote(ctx context.Context, raft rt.RaftClient, req *rt.CandidateRequest) (*rt.VoteResults, error) {
+	duration := 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	resp, err := raft.RequestVote(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
 }
