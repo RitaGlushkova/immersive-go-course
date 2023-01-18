@@ -19,6 +19,7 @@ import (
 	"github.com/honeycombio/opentelemetry-go-contrib/launcher"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -30,6 +31,7 @@ var (
 
 	raftDir       = flag.String("raft_data_dir", "data/", "Raft data dir")
 	raftBootstrap = flag.Bool("raft_bootstrap", false, "Whether to bootstrap the Raft cluster")
+	tracer        = otel.Tracer("raft-otel-service")
 )
 
 func main() {
@@ -43,7 +45,6 @@ func main() {
 		log.Fatalf("error setting up OTel SDK - %e", err)
 	}
 	defer otelShutdown()
-	var tracer = otel.Tracer("raft-otel-service")
 
 	flag.Parse()
 
@@ -64,9 +65,9 @@ func main() {
 	wt := &wordTracker{}
 
 	// start the span for the server registration
-	ctx, span := tracer.Start(ctx, "register_server",
+	_, span := tracer.Start(ctx, "register_server",
 		trace.WithSpanKind(trace.SpanKindServer))
-	span.SetName("register_server")
+	span.AddEvent("registering server", trace.WithAttributes(attribute.String("port", port)))
 	r, tm, err := NewRaft(ctx, *raftId, *myAddr, wt)
 	if err != nil {
 		log.Fatalf("failed to start raft: %v", err)
@@ -109,9 +110,9 @@ func NewRaft(ctx context.Context, myID, myAddress string, fsm raft.FSM) (*raft.R
 		return nil, nil, fmt.Errorf(`raft.NewFileSnapshotStore(%q, ...): %v`, baseDir, err)
 	}
 
-	tm := transport.New(raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure()})
+	tm := transport.New(raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure(), grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()), grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor())})
 
-	r, err := raft.NewRaft(c, fsm, ldb, sdb, fss, tm.Transport())
+	r, err := raft.NewRaft(c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("raft.NewRaft: %v", err)
 	}
@@ -133,4 +134,5 @@ func NewRaft(ctx context.Context, myID, myAddress string, fsm raft.FSM) (*raft.R
 	}
 
 	return r, tm, nil
+
 }
