@@ -19,8 +19,9 @@ import (
 	"github.com/honeycombio/opentelemetry-go-contrib/launcher"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+
+	//"go.opentelemetry.io/otel/attribute"
+	//"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -53,6 +54,8 @@ func main() {
 	}
 
 	ctx := context.Background()
+	ctx, parentSpan := tracer.Start(ctx, "parent")
+
 	_, port, err := net.SplitHostPort(*myAddr)
 	if err != nil {
 		log.Fatalf("failed to parse local address (%q): %v", *myAddr, err)
@@ -64,10 +67,6 @@ func main() {
 
 	wt := &wordTracker{}
 
-	// start the span for the server registration
-	_, span := tracer.Start(ctx, "register_server",
-		trace.WithSpanKind(trace.SpanKindServer))
-	span.AddEvent("registering server", trace.WithAttributes(attribute.String("port", port)))
 	r, tm, err := NewRaft(ctx, *raftId, *myAddr, wt)
 	if err != nil {
 		log.Fatalf("failed to start raft: %v", err)
@@ -80,10 +79,10 @@ func main() {
 	})
 	tm.Register(s)
 	// end the span for the server registration
-	span.End()
 	leaderhealth.Setup(r, s, []string{"Example"})
 	raftadmin.Register(s, r)
 	reflection.Register(s)
+	parentSpan.End()
 	if err := s.Serve(sock); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
@@ -112,7 +111,7 @@ func NewRaft(ctx context.Context, myID, myAddress string, fsm raft.FSM) (*raft.R
 
 	tm := transport.New(raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure(), grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()), grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor())})
 
-	r, err := raft.NewRaft(c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
+	r, err := raft.NewRaft(ctx, c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("raft.NewRaft: %v", err)
 	}
