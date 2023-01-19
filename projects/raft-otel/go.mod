@@ -26,4 +26,7 @@ require (
 	moul.io/number-to-words v0.6.0
 )
 
-replace github.com/hashicorp/raft => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft
+replace (
+github.com/hashicorp/raft => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft
+github.com/Jille/raft-grpc-transport => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft-grpc-transport
+)

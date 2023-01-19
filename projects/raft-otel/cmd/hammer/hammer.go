@@ -43,6 +43,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for w := range ch {
+				fmt.Println(w, "w")
 				_, err := c.AddWord(context.Background(), &pb.AddWordRequest{Word: w})
 				if err != nil {
 					log.Fatalf("AddWord RPC failed: %v", err)
@@ -61,7 +62,7 @@ func main() {
 func generateWords() <-chan string {
 	ch := make(chan string, 1)
 	go func() {
-		for i := 1; 2000 > i; i++ {
+		for i := 1; 10 > i; i++ {
 			ch <- ntw.IntegerToNlNl(i)
 		}
 		close(ch)

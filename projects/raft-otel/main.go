@@ -17,11 +17,13 @@ import (
 	boltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/honeycombio/honeycomb-opentelemetry-go"
 	"github.com/honeycombio/opentelemetry-go-contrib/launcher"
+	"github.com/joho/godotenv"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	//"go.opentelemetry.io/otel/attribute"
-	//"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -36,16 +38,28 @@ var (
 )
 
 func main() {
-	// enable multi-span attributes
-	bsp := honeycomb.NewBaggageSpanProcessor()
-	// use honeycomb distro to setup OpenTelemetry SDK
-	otelShutdown, err := launcher.ConfigureOpenTelemetry(
-		launcher.WithSpanProcessor(bsp),
-	)
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("error setting up OTel SDK - %e", err)
+		os.Stdout.WriteString("Warning: No .env file found. Consider creating one\n")
 	}
-	defer otelShutdown()
+
+	apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
+
+	if apikeyPresent {
+		serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
+		os.Stderr.WriteString(fmt.Sprintf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName))
+
+		otelShutdown, err := launcher.ConfigureOpenTelemetry(
+			honeycomb.WithApiKey(apikey),
+			launcher.WithServiceName(serviceName),
+		)
+		if err != nil {
+			log.Fatalf("error setting up OTel SDK - %e", err)
+		}
+		defer otelShutdown()
+	} else {
+		os.Stdout.WriteString("Honeycomb API key not set - disabling OpenTelemetry")
+	}
 
 	flag.Parse()
 
@@ -54,9 +68,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	ctx, parentSpan := tracer.Start(ctx, "parent")
-
+	parentSpan := trace.SpanFromContext(ctx)
+	parentSpan.SetAttributes(attribute.String("start", "main"))
 	_, port, err := net.SplitHostPort(*myAddr)
+
 	if err != nil {
 		log.Fatalf("failed to parse local address (%q): %v", *myAddr, err)
 	}
@@ -111,6 +126,7 @@ func NewRaft(ctx context.Context, myID, myAddress string, fsm raft.FSM) (*raft.R
 
 	tm := transport.New(raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure(), grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()), grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor())})
 
+	//r, err := raft.NewRaft(ctx, c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
 	r, err := raft.NewRaft(ctx, c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("raft.NewRaft: %v", err)
