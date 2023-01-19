@@ -21,7 +21,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	//"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
@@ -66,10 +65,9 @@ func main() {
 	if *raftId == "" {
 		log.Fatalf("flag --raft_id is required")
 	}
-
 	ctx := context.Background()
-	parentSpan := trace.SpanFromContext(ctx)
-	parentSpan.SetAttributes(attribute.String("start", "main"))
+	ictx, parentSpan := tracer.Start(ctx, "main")
+	parentSpan.SetAttributes(attribute.String("status", "parent span"))
 	_, port, err := net.SplitHostPort(*myAddr)
 
 	if err != nil {
@@ -82,7 +80,7 @@ func main() {
 
 	wt := &wordTracker{}
 
-	r, tm, err := NewRaft(ctx, *raftId, *myAddr, wt)
+	r, tm, err := NewRaft(ictx, *raftId, *myAddr, wt)
 	if err != nil {
 		log.Fatalf("failed to start raft: %v", err)
 	}
@@ -124,7 +122,7 @@ func NewRaft(ctx context.Context, myID, myAddress string, fsm raft.FSM) (*raft.R
 		return nil, nil, fmt.Errorf(`raft.NewFileSnapshotStore(%q, ...): %v`, baseDir, err)
 	}
 
-	tm := transport.New(raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure(), grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()), grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor())})
+	tm := transport.New(ctx, raft.ServerAddress(myAddress), []grpc.DialOption{grpc.WithInsecure(), grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()), grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor())})
 
 	//r, err := raft.NewRaft(ctx, c, fsm, ldb, sdb, fss, tm.Transport(), tracer)
 	r, err := raft.NewRaft(ctx, c, fsm, ldb, sdb, fss, tm.Transport(), tracer)

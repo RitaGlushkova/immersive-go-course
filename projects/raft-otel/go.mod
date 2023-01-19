@@ -15,6 +15,7 @@ require (
 	github.com/hashicorp/raft-boltdb v0.0.0-20220329195025-15018e9b97e0
 	github.com/honeycombio/honeycomb-opentelemetry-go v0.4.0
 	github.com/honeycombio/opentelemetry-go-contrib/launcher v0.0.0-20230104152713-a01f612b1b01
+	github.com/joho/godotenv v1.4.0
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.37.0
 	go.opentelemetry.io/otel v1.11.2
@@ -27,6 +28,6 @@ require (
 )
 
 replace (
-github.com/hashicorp/raft => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft
-github.com/Jille/raft-grpc-transport => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft-grpc-transport
+	github.com/Jille/raft-grpc-transport => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft-grpc-transport
+	github.com/hashicorp/raft => /Users/margaritaglushkova/Desktop/GitHub/CYF_WORK/raft
 )
