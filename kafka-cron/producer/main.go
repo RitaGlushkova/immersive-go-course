@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/honeycombio/honeycomb-opentelemetry-go"
+	_ "github.com/honeycombio/honeycomb-opentelemetry-go"
+	"github.com/honeycombio/opentelemetry-go-contrib/launcher"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -20,6 +23,17 @@ var (
 )
 
 func main() {
+	// enable multi-span attributes
+	bsp := honeycomb.NewBaggageSpanProcessor()
+
+	// use honeycomb distro to setup OpenTelemetry SDK
+	otelShutdown, err := launcher.ConfigureOpenTelemetry(
+		launcher.WithSpanProcessor(bsp),
+	)
+	if err != nil {
+		log.Fatalf("error setting up OTel SDK - %e", err)
+	}
+	defer otelShutdown()
 	setupPrometheus(2112)
 	flag.Parse()
 	topicConfig := types.TopicConfig{
