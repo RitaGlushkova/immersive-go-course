@@ -1,6 +1,8 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 type Cronjob struct {
 	Crontab            string      `json:"crontab"`
@@ -10,6 +12,7 @@ type Cronjob struct {
 	Retries            int         `json:"retries"`
 	TimestampProduced  time.Time   `json:"timestamp"`
 	TimestampAttempted []time.Time `json:"timestamp_attempted"`
+	TraceID            string      `json:"trace_id"`
 }
 
 // type Cronjob struct {

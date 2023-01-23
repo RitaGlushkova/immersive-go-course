@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
+	github.com/honeycombio/otel-launcher-go v0.1.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/sirupsen/logrus v1.9.0
@@ -17,7 +18,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
-	github.com/honeycombio/otel-launcher-go v0.1.0 // indirect
+	//github.com/honeycombio/opentelemetry-go-contrib/launcher v0.0.0-20230104152713-a01f612b1b01
+	// github.com/honeycombio/otel-launcher-go v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/sethvargo/go-envconfig v0.8.2 // indirect
@@ -57,6 +59,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.9.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/honeycombio/honeycomb-opentelemetry-go v0.4.1
+	github.com/joho/godotenv v1.4.0
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect

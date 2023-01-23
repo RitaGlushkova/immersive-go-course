@@ -1,16 +1,23 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"kafka-cron/utils"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/honeycombio/honeycomb-opentelemetry-go"
+	"github.com/honeycombio/otel-launcher-go/launcher"
+	"github.com/joho/godotenv"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -26,6 +33,31 @@ var (
 )
 
 func main() {
+	// enable multi-span attributes
+	err := godotenv.Load()
+	if err != nil {
+		os.Stdout.WriteString("Warning: No .env file found. Consider creating one\n")
+	}
+
+	apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
+
+	if apikeyPresent {
+		serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
+		os.Stderr.WriteString(fmt.Sprintf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName))
+
+		otelShutdown, err := launcher.ConfigureOpenTelemetry(
+			honeycomb.WithApiKey(apikey),
+			launcher.WithServiceName(serviceName),
+		)
+		if err != nil {
+			log.Fatalf("error setting up OTel SDK - %e", err)
+		}
+		defer otelShutdown()
+	} else {
+		os.Stdout.WriteString("Honeycomb API key not set - disabling OpenTelemetry")
+	}
+
+	tracer := otel.Tracer("")
 	setupPrometheus(2112)
 	flag.Parse()
 
@@ -128,7 +160,17 @@ func main() {
 					LatencyProductionToReception.WithLabelValues(*km.TopicPartition.Topic).Observe(time.Since(cronJob.TimestampProduced).Seconds())
 				}
 				startExec := time.Now()
+				traceID, err := trace.TraceIDFromHex(cronJob.TraceID)
+				if err != nil {
+					fmt.Println(err)
+				}
+				spanCtx := trace.SpanContextFromContext(context.Background()).WithTraceID(traceID)
+				fmt.Println(cronJob.TraceID, "TRACE ID CONSUMER CRONJOB")
+				ctx := trace.ContextWithSpanContext(context.Background(), spanCtx)
+				_, span := tracer.Start(ctx, "consumer_job_execution")
+				fmt.Println(span.SpanContext().TraceID(), "SPAN TRACE ID CONSUMER")
 				out, err := ExecJob(cronJob.Command, cronJob.Args)
+				span.End()
 				// Prometheus
 				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				if err != nil {

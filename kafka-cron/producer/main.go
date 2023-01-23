@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,9 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/honeycombio/honeycomb-opentelemetry-go"
 	_ "github.com/honeycombio/honeycomb-opentelemetry-go"
-	"github.com/honeycombio/opentelemetry-go-contrib/launcher"
+	"github.com/honeycombio/otel-launcher-go/launcher"
+	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -24,16 +27,31 @@ var (
 
 func main() {
 	// enable multi-span attributes
-	bsp := honeycomb.NewBaggageSpanProcessor()
-
-	// use honeycomb distro to setup OpenTelemetry SDK
-	otelShutdown, err := launcher.ConfigureOpenTelemetry(
-		launcher.WithSpanProcessor(bsp),
-	)
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("error setting up OTel SDK - %e", err)
+		os.Stdout.WriteString("Warning: No .env file found. Consider creating one\n")
 	}
-	defer otelShutdown()
+
+	apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
+
+	if apikeyPresent {
+		serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
+		os.Stderr.WriteString(fmt.Sprintf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName))
+
+		otelShutdown, err := launcher.ConfigureOpenTelemetry(
+			honeycomb.WithApiKey(apikey),
+			launcher.WithServiceName(serviceName),
+		)
+		if err != nil {
+			log.Fatalf("error setting up OTel SDK - %e", err)
+		}
+		defer otelShutdown()
+	} else {
+		os.Stdout.WriteString("Honeycomb API key not set - disabling OpenTelemetry")
+	}
+
+	tracer := otel.Tracer("")
+
 	setupPrometheus(2112)
 	flag.Parse()
 	topicConfig := types.TopicConfig{
@@ -90,13 +108,18 @@ func main() {
 	}
 
 	for _, job := range cronjobs {
+		ctx := context.Background()
+		_, span := tracer.Start(ctx, "produce_message")
 		myJob := types.Cronjob{
 			Crontab:           job.Crontab,
 			Command:           job.Command,
 			Args:              job.Args,
 			Cluster:           job.Cluster,
 			Retries:           job.Retries,
-			TimestampProduced: time.Now()}
+			TimestampProduced: time.Now(),
+			TraceID:           span.SpanContext().TraceID().String()}
+
+		fmt.Println(myJob.TraceID, "TRACEID PRODUCER")
 		_, cronErr := cron.AddFunc(job.Crontab, func() {
 			var message kafka.Message
 			//add timnestamp
@@ -120,6 +143,7 @@ func main() {
 			//Prometheus
 			startProduce := time.Now()
 			errStr := ""
+
 			err = p.Produce(&message, nil)
 			if err != nil {
 				//Prometheus
@@ -129,6 +153,7 @@ func main() {
 			}
 			LatencyMessageProduced.WithLabelValues(*message.TopicPartition.Topic, errStr).Observe(time.Since(startProduce).Seconds())
 			MessageCounterSuccess.WithLabelValues(*message.TopicPartition.Topic, "producing_message").Inc()
+			span.End()
 		})
 		if cronErr != nil {
 			fmt.Println(cronErr)
