@@ -37,7 +37,7 @@ func main() {
 	if apikeyPresent {
 		serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
 		os.Stderr.WriteString(fmt.Sprintf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName))
-
+		fmt.Println(serviceName, "service name")
 		otelShutdown, err := launcher.ConfigureOpenTelemetry(
 			honeycomb.WithApiKey(apikey),
 			launcher.WithServiceName(serviceName),
@@ -108,8 +108,6 @@ func main() {
 	}
 
 	for _, job := range cronjobs {
-		ctx := context.Background()
-		_, span := tracer.Start(ctx, "produce_message")
 		myJob := types.Cronjob{
 			Crontab:           job.Crontab,
 			Command:           job.Command,
@@ -117,10 +115,12 @@ func main() {
 			Cluster:           job.Cluster,
 			Retries:           job.Retries,
 			TimestampProduced: time.Now(),
-			TraceID:           span.SpanContext().TraceID().String()}
-
-		fmt.Println(myJob.TraceID, "TRACEID PRODUCER")
+		}
 		_, cronErr := cron.AddFunc(job.Crontab, func() {
+			ctx := context.Background()
+			_, span := tracer.Start(ctx, "produce_message")
+			myJob.TraceID = span.SpanContext().TraceID().String()
+
 			var message kafka.Message
 			//add timnestamp
 			myJob.TimestampProduced = time.Now()
@@ -143,8 +143,9 @@ func main() {
 			//Prometheus
 			startProduce := time.Now()
 			errStr := ""
-
+			fmt.Println("HONEY COMB", span.IsRecording())
 			err = p.Produce(&message, nil)
+
 			if err != nil {
 				//Prometheus
 				MessageCounterError.WithLabelValues(*message.TopicPartition.Topic, "producing_message").Inc()
@@ -159,7 +160,7 @@ func main() {
 			fmt.Println(cronErr)
 			CronErrorCounter.WithLabelValues(myJob.Cluster, "cronjob_error").Inc()
 		}
-		fmt.Printf("cronjobs: started cron for %+v\n", myJob)
+		fmt.Printf("cronjobs: started cron for %+v\n", job)
 		CronSuccessCounter.WithLabelValues(myJob.Cluster, "cronjob_success").Inc()
 	}
 	cron.Run()

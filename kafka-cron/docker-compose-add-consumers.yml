@@ -15,6 +15,8 @@ cluster-b2:
       "cluster-b-topic",
       "--group",
       "cluster-b",
+      "--poll",
+      "3000",
     ]
 cluster-b-retries:
   depends_on:
@@ -32,4 +34,6 @@ cluster-b-retries:
       "cluster-b-topic-retries",
       "--group",
       "cluster-b",
+      "--poll",
+      "3000",
     ]

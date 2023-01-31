@@ -67,7 +67,7 @@ var (
 		Name: "counter_of_exceeded_retries",
 		Help: "metric that tracks the number of messages that exceeded the number of retries",
 	}, []string{
-		"topic", "command",
+		"topic",
 	})
 )
 

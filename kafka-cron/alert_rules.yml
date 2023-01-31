@@ -16,7 +16,7 @@ groups:
     rules:
       - alert: ExecutionErrorExceeded
         # Condition for alerting
-        expr: counter_of_exceeded_retries > 3
+        expr: counter_of_exceeded_retries{topic="cluster-a-topic-retries"} > 3
         # Annotation - additional informational labels to store more information
         annotations:
           title: "Jobs can not be executed after multiple retries"

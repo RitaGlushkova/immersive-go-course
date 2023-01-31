@@ -28,8 +28,9 @@ const (
 
 var (
 	consumerGroup = flag.String("group", DefaultConsumerGroup, "The name of the consumer group, used for coordination and load balancing")
-	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "The comma-separated list of topics to consume")
-	kafkaBroker   = flag.String("broker", "localhost:9092", "The comma-separated list of brokers in the Kafka cluster")
+	kafkaTopic    = flag.String("topic", DefaultKafkaTopic, "topic to consume")
+	kafkaBroker   = flag.String("broker", "localhost:9092", "broker in the Kafka cluster")
+	pollDuration  = flag.Int("poll", 3000, "The duration of the polling timeout")
 )
 
 func main() {
@@ -62,77 +63,27 @@ func main() {
 	flag.Parse()
 
 	// Create producer for retries
-	p, err := utils.SetupProducer(*kafkaBroker)
+	retryProducer, err := utils.SetupProducer(*kafkaBroker)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	// Produce messages to topic_retries
+	// Delivery confirmation topic_retries
 	go func() {
-		for e := range p.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-
-				if ev.TopicPartition.Error != nil {
-					CounterMessagesError.WithLabelValues(*ev.TopicPartition.Topic, "retries_topic_partition_error").Inc()
-					utils.PrintDeliveryFairure(ev)
-				} else {
-					CounterMessagesSuccess.WithLabelValues(*ev.TopicPartition.Topic, "message_delivered_to_retries_topic").Inc()
-					utils.PrintDeliveryConfirmation(ev)
-				}
-			case kafka.Error:
-				CounterMessagesError.WithLabelValues(*kafkaTopic, "producer_events_retries_kafka_error").Inc()
-				fmt.Printf("Caught an error:\n\t%v\n", ev.Error())
-			default:
-				CounterMessagesError.WithLabelValues(*kafkaTopic, "producer_events_retries_default_error").Inc()
-				// It's not anything we were expecting
-				fmt.Printf("Got an event that's not a Message or Error 👻\n\t%v\n", ev)
-
-			}
-		}
+		DeliveryToKafka(retryProducer)
 	}()
-
-	// Configure Consumer
-	cm := kafka.ConfigMap{
-		"bootstrap.servers":  *kafkaBroker,
-		"group.id":           *consumerGroup,
-		"session.timeout.ms": 6000,
-		"auto.offset.reset":  "latest",
-		"enable.auto.commit": false,
-	}
-
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-
-	c, err := kafka.NewConsumer(&cm)
-	// Check for errors in creating the Consumer
-	if err != nil {
-		if ke, ok := err.(kafka.Error); ok {
-			switch ec := ke.Code(); ec {
-			case kafka.ErrInvalidArg:
-				fmt.Printf("Can't create the Consumer because you've configured it wrong (code: %d)!\n\t%v\n", ec, err)
-				os.Exit(1)
-			default:
-				fmt.Printf("Can't create the Consumer (Kafka error code %d)\n\tError: %v\n", ec, err)
-				os.Exit(1)
-			}
-		} else {
-			// It's not a kafka.Error
-			fmt.Printf("There's a generic error creating the Consumer! %v", err.Error())
-			os.Exit(1)
-		}
-
-	}
-	fmt.Printf("Created Consumer %v\n", cm)
-
+	// Create consumer
+	consumer := SetupConsumer()
 	// Subscribe to the topic
-	if err := c.Subscribe(*kafkaTopic, nil); err != nil {
+	if err := consumer.Subscribe(*kafkaTopic, nil); err != nil {
 		fmt.Printf("There was an error subscribing to the topic :\n\t%v\n", err)
 		os.Exit(1)
 	}
-
+	// Start consuming
 	run := true
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
 	for run {
 		select {
@@ -140,7 +91,7 @@ func main() {
 			fmt.Printf("Caught signal %v: terminating\n", sig)
 			run = false
 		default:
-			ev := c.Poll(3000)
+			ev := consumer.Poll(*pollDuration)
 			if ev == nil {
 				// the Poll timed out and we got nothing'
 				fmt.Printf("……\n")
@@ -167,10 +118,10 @@ func main() {
 				spanCtx := trace.SpanContextFromContext(context.Background()).WithTraceID(traceID)
 				fmt.Println(cronJob.TraceID, "TRACE ID CONSUMER CRONJOB")
 				ctx := trace.ContextWithSpanContext(context.Background(), spanCtx)
-				_, span := tracer.Start(ctx, "consumer_job_execution")
-				fmt.Println(span.SpanContext().TraceID(), "SPAN TRACE ID CONSUMER")
-				out, err := ExecJob(cronJob.Command, cronJob.Args)
-				span.End()
+				parentCtx, parentSpan := tracer.Start(ctx, "consumer_job_received")
+				fmt.Println(parentSpan.SpanContext().TraceID(), "SPAN TRACE ID CONSUMER")
+				out, err := ExecJob(parentCtx, traceID, tracer, cronJob.Command, cronJob.Args)
+
 				// Prometheus
 				LatencyExecution.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				if err != nil {
@@ -190,19 +141,23 @@ func main() {
 								Key:            []byte(km.Key),
 								Value:          []byte(recordValue),
 							}
-							err = p.Produce(&message, nil)
+							_, span := tracer.Start(parentCtx, "produce_job_retry")
+							err = retryProducer.Produce(&message, nil)
 							if err != nil {
 								//Prometheus
-								CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "retries_topic_Produce_message_error").Inc()
+								CounterMessagesError.WithLabelValues(*km.TopicPartition.Topic, "message_produced_to_retries_topic_error").Inc()
 								fmt.Printf("Failed to produce message: %s\n", err.Error())
 							}
+							CounterMessagesSuccess.WithLabelValues(*km.TopicPartition.Topic, "message_produced_to_retries_topic").Inc()
 							fmt.Println("🤞 Retrying job", cronJob.Retries, "retries left")
+							span.End()
 						}()
 					} else {
 						fmt.Println("No retries left")
 						//Prometheus
-						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Inc()
+						CounterOfExceededRetries.WithLabelValues(*km.TopicPartition.Topic).Inc()
 					}
+
 					//Prometheus
 					LatencyExecutionError.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				} else {
@@ -213,6 +168,7 @@ func main() {
 					//Prometheus
 					LatencyExecutionSuccess.WithLabelValues(*km.TopicPartition.Topic, cronJob.Command).Observe(time.Since(startExec).Seconds())
 				}
+				parentSpan.End()
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
 				if e.Code() == kafka.ErrAllBrokersDown {
@@ -229,5 +185,5 @@ func main() {
 		}
 	}
 	fmt.Printf("👋 … and we're done. Closing the consumer and exiting.\n")
-	c.Close()
+	consumer.Close()
 }

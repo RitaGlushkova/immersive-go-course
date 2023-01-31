@@ -80,6 +80,8 @@ services:
         "cluster-a-topic",
         "--group",
         "cluster-a",
+        "--poll",
+        "3000",
       ]
 
   cluster-a-retries:
@@ -102,6 +104,8 @@ services:
         "cluster-a-topic-retries",
         "--group",
         "cluster-a",
+        "--poll",
+        "3000",
       ]
 
   cluster-b:
@@ -124,4 +128,6 @@ services:
         "cluster-b-topic",
         "--group",
         "cluster-b",
+        "--poll",
+        "3000",
       ]
