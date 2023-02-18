@@ -1,7 +1,8 @@
+<!--forhugo
 +++
 title="GRPC Client and Server Communication"
-author="Laura Nolan"
 +++
+forhugo-->
 
 Timebox: 3 days
 

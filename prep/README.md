@@ -1,8 +1,8 @@
+<!--forhugo
 +++
 title="Preparation"
-author="Daniel Wagner Hall"
-weight="1"
 +++
+forhugo-->
 
 ## Prerequisite learning
 
@@ -80,7 +80,7 @@ It doesn't matter what this does: what's important is the input command and the 
 Input command:
 
 ```console
-curl -i 'http://localhost:8080/'
+> curl -i 'http://localhost:8080/'
 ```
 
 Expected output:

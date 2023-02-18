@@ -1,8 +1,8 @@
+<!--forhugo
 +++
 title="5. Distributed Locking and Distributed Consensus"
-author="Laura Nolan"
-date="28 Dec 2022 12:22:11 BST" 
 +++
+forhugo-->
 
 # 5
 

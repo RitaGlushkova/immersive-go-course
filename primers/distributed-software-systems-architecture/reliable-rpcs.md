@@ -1,8 +1,8 @@
+<!--forhugo
 +++
-title="1. Reliable RPCs"
-author="Laura Nolan"
-date="28 Dec 2022 12:22:11 BST"    
+title="1. Reliable RPCs"   
 +++
+forhugo-->
 
 # 1
 

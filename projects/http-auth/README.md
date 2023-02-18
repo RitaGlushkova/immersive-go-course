@@ -1,7 +1,8 @@
+<!--forhugo
 +++
 title="Servers & HTTP requests"
-author="Tom Ashworth"
 +++
+forhugo-->
 
 In this project we are going to learn about long-lived processes, some networking and the fundamentals of HTTP.
 

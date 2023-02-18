@@ -1,7 +1,8 @@
+<!--forhugo
 +++
 title="Distributed Cron Based on Kafka"
-author="Laura Nolan"
 +++
+forhugo-->
 
 In this project we're going to build a simple distributed `cron` system, based on the Apache Kafka distributed queue system.
 
