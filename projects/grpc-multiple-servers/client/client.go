@@ -29,14 +29,14 @@ type UserInfo struct {
 	College    string
 	Occupation string
 	Age        int32
-	Avatar     string
+	Redirect   string
+	Port       int32
 	Notfound   string
 }
 
-func main() {
-	flag.Parse()
+func contactServer(addr string) (*pb.UserInfoReply, error) {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -48,7 +48,26 @@ func main() {
 	defer cancel()
 	r, err := c.SendUserInfo(ctx, &pb.UserInfoRequest{Name: *name, Dob: *dob})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		return nil, err
 	}
-	log.Printf("User Info: %v", UserInfo{Name: r.GetName(), DOB: r.GetDob(), Email: r.GetEmail(), College: r.GetCollege(), Occupation: r.GetOccupation(), Age: r.GetAge(), Avatar: r.GetAvatar(), Notfound: r.GetNotfound()})
+	return r, nil
+}
+
+func main() {
+	flag.Parse()
+	r, err := contactServer(*addr)
+	if err != nil {
+		log.Fatalf("Couldn't send request Info: %v", err)
+	}
+	if r.GetRedirect() != "" {
+		log.Printf("Redirect to: %v", r.GetRedirect())
+		r, err = contactServer(r.GetRedirect())
+		if err != nil {
+			log.Fatalf("Couldn't send request Info: %v", err)
+		}
+		if r.Notfound != "" {
+			log.Fatalf("User not found: %v", r.GetNotfound())
+		}
+	}
+	log.Printf("User Info: %v", UserInfo{Name: r.GetName(), DOB: r.GetDob(), Email: r.GetEmail(), College: r.GetCollege(), Occupation: r.GetOccupation(), Age: r.GetAge()})
 }

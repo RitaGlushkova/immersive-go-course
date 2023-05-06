@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option go_package = "github.com/RitaGlushkova/immersive-go-course/projects/grpc-multiple-servers/userinfo";
+
+package protobuf;
+
+// The greeting service definition.
+service UserInfo {
+  // Sends information about User
+  rpc SendUserInfo (UserInfoRequest) returns (UserInfoReply) {}
+}
+
+// The request message containing the user's name and date of birth.
+message UserInfoRequest {
+  string name = 1;
+  string dob = 2; 
+}
+
+// The response message containing user information
+message UserInfoReply {
+  string name = 1;
+  string dob = 2;
+  string email = 3;
+  string college = 4;
+  string occupation = 5;
+  int32 age = 6;
+  string redirect = 7;
+  string notfound = 8;
+}
